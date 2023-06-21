@@ -1,5 +1,8 @@
+
+
 import time as tm
 import datetime
+import math
 from . import maths
 
 
@@ -42,32 +45,89 @@ class SecTimer:
 
 
 class Timer:
-    def __init__(self):
-        self.end_datetime = None
-        self.delta_time = None
-        self.start_datetime = datetime.datetime.today()
 
-    def _define_delta_time(self):
-        self.end_datetime = datetime.datetime.today()
-        timedelta_builtin = self.end_datetime - self.start_datetime
-        self.delta_time = TimeDelta(
+    def __init__(self):
+
+        self.end_datetime = None
+        self.delta_time_total = None
+
+        self.current_tick = None
+        self.delta_time_ticks = None
+
+        self.previous_tick = self.start_datetime = datetime.datetime.today()
+
+    def _define_delta_time(self, start_datetime, end_datetime):
+
+        timedelta_builtin = end_datetime - start_datetime
+        delta_time = TimeDelta(
             days=timedelta_builtin.days,
             seconds=timedelta_builtin.seconds,
             microseconds=timedelta_builtin.microseconds)
 
-    def get_delta_time(self):
-        self._define_delta_time()
-        return self.delta_time
+        return delta_time
 
-    def get_seconds(self):
-        self._define_delta_time()
-        seconds = self.delta_time.to_seconds()
+    def _define_delta_time_total(self):
+
+        self.end_datetime = datetime.datetime.today()
+        self.delta_time_total = self._define_delta_time(
+            start_datetime=self.start_datetime, end_datetime=self.end_datetime)
+
+    def _define_delta_time_ticks(self):
+        self.current_tick = datetime.datetime.today()
+        self.delta_time_ticks = self._define_delta_time(
+            start_datetime=self.previous_tick, end_datetime=self.current_tick)
+
+    def _tick(self):
+        self._define_delta_time_ticks()
+        self.previous_tick , self.current_tick = self.current_tick, None
+        return self.delta_time_ticks
+
+    def get_delta_time_total(self):
+        self._define_delta_time_total()
+        return self.delta_time_total
+
+    def get_delta_time_ticks(self):
+        self._define_delta_time_ticks()
+        return self.delta_time_ticks
+
+    def get_seconds_total(self):
+        self._define_delta_time_total()
+        seconds = self.delta_time_total.to_seconds()
         return seconds
 
-    def get_milliseconds(self):
-        self._define_delta_time()
-        milliseconds = self.delta_time.to_milliseconds()
+    def get_milliseconds_total(self):
+        self._define_delta_time_total()
+        milliseconds = self.delta_time_total.to_milliseconds()
         return milliseconds
+
+    def get_seconds_ticks(self):
+        self._define_delta_time_ticks()
+        seconds = self.delta_time_ticks.to_seconds()
+        return seconds
+
+    def get_milliseconds_ticks(self):
+        self._define_delta_time_ticks()
+        milliseconds = self.delta_time_ticks.to_milliseconds()
+        return milliseconds
+    
+    def wait(self, seconds):
+
+        correction_secs = -0.0005
+
+        passed_seconds = self.get_seconds_ticks()
+        remaining_seconds = seconds - passed_seconds + correction_secs
+        if remaining_seconds > 0:
+            tm.sleep(remaining_seconds)
+
+        # passed_seconds = self.get_seconds_ticks()
+        # remaining_seconds = seconds - passed_seconds
+        # while remaining_seconds > 0:
+        #     passed_seconds = self.get_seconds_ticks()
+        #     remaining_seconds = seconds - passed_seconds
+
+        self._tick()
+
+        return self.delta_time_ticks.to_seconds()
 
 
 class TimeDelta:
@@ -82,19 +142,19 @@ class TimeDelta:
             (maths.convert_to_int_or_float(milliseconds) * microseconds_per_millisecond) +
             maths.convert_to_int_or_float(microseconds))
 
-        self.milliseconds = int(self.microseconds / microseconds_per_millisecond)
+        self.milliseconds = math.floor(self.microseconds / microseconds_per_millisecond)
         self.microseconds -= (self.milliseconds * microseconds_per_millisecond)
 
-        self.seconds = int(self.milliseconds / milliseconds_per_second)
+        self.seconds = math.floor(self.milliseconds / milliseconds_per_second)
         self.milliseconds -= (self.seconds * milliseconds_per_second)
 
-        self.minutes = int(self.seconds / seconds_per_minute)
+        self.minutes = math.floor(self.seconds / seconds_per_minute)
         self.seconds -= (self.minutes * seconds_per_minute)
 
-        self.hours = int(self.minutes / minutes_per_hour)
+        self.hours = math.floor(self.minutes / minutes_per_hour)
         self.minutes -= (self.hours * minutes_per_hour)
 
-        self.days = int(self.hours / hours_per_day)
+        self.days = math.floor(self.hours / hours_per_day)
         self.hours -= (self.days * hours_per_day)
 
     def to_seconds(self):
