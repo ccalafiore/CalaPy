@@ -46,19 +46,27 @@ class SecTimer:
 
 class Timer:
 
-    def __init__(self):
+    def __init__(self, ticks_per_sec=None):
 
-        self.end_datetime = None
-        self.delta_time_total = None
+        self.ticks_per_sec = ticks_per_sec
 
-        self.current_tick = None
-        self.delta_time_ticks = None
+        if self.ticks_per_sec is None:
+            self.secs_per_tick = None
+            self.last_tick_count = None
+            self.last_tick_secs = None
+            self.calculate_ticks = False
+        else:
+            self.secs_per_tick = 1 / self.ticks_per_sec
+            self.last_tick_count = 0
+            self.last_tick_secs = 0
+            self.calculate_ticks = True
 
-        self.previous_tick = self.start_datetime = datetime.datetime.today()
+        self.start_datetime = datetime.datetime.today()
 
-    def _define_delta_time(self, start_datetime, end_datetime):
+    def _define_delta_time(self, datetime_0, datetime_1):
 
-        timedelta_builtin = end_datetime - start_datetime
+        timedelta_builtin = datetime_1 - datetime_0
+
         delta_time = TimeDelta(
             days=timedelta_builtin.days,
             seconds=timedelta_builtin.seconds,
@@ -68,66 +76,72 @@ class Timer:
 
     def _define_delta_time_total(self):
 
-        self.end_datetime = datetime.datetime.today()
-        self.delta_time_total = self._define_delta_time(
-            start_datetime=self.start_datetime, end_datetime=self.end_datetime)
+        current_datetime = datetime.datetime.today()
+
+        delta_time_total = self._define_delta_time(
+            datetime_0=self.start_datetime, datetime_1=current_datetime)
+
+        return delta_time_total
 
     def _define_delta_time_ticks(self):
-        self.current_tick = datetime.datetime.today()
-        self.delta_time_ticks = self._define_delta_time(
-            start_datetime=self.previous_tick, end_datetime=self.current_tick)
+
+        delta_time_total = self._define_delta_time_total()
+
+        secs_since_last_tick = delta_time_total.to_seconds() - self.last_tick_secs
+
+        delta_time_ticks = TimeDelta(seconds=secs_since_last_tick)
+
+        return delta_time_ticks
 
     def _tick(self):
-        self._define_delta_time_ticks()
-        self.previous_tick , self.current_tick = self.current_tick, None
-        return self.delta_time_ticks
+
+        self.last_tick_count += 1
+        self.last_tick_secs = self.secs_per_tick * self.last_tick_count
 
     def get_delta_time_total(self):
-        self._define_delta_time_total()
-        return self.delta_time_total
+        delta_time_total = self._define_delta_time_total()
+        return delta_time_total
 
     def get_delta_time_ticks(self):
-        self._define_delta_time_ticks()
-        return self.delta_time_ticks
+        delta_time_ticks = self._define_delta_time_ticks()
+        return delta_time_ticks
 
     def get_seconds_total(self):
-        self._define_delta_time_total()
-        seconds = self.delta_time_total.to_seconds()
+        seconds = self._define_delta_time_total().to_seconds()
         return seconds
 
     def get_milliseconds_total(self):
-        self._define_delta_time_total()
-        milliseconds = self.delta_time_total.to_milliseconds()
+        milliseconds = self._define_delta_time_total().to_milliseconds()
         return milliseconds
 
     def get_seconds_ticks(self):
-        self._define_delta_time_ticks()
-        seconds = self.delta_time_ticks.to_seconds()
+        seconds = self._define_delta_time_ticks().to_seconds()
         return seconds
 
     def get_milliseconds_ticks(self):
-        self._define_delta_time_ticks()
-        milliseconds = self.delta_time_ticks.to_milliseconds()
+        milliseconds = self._define_delta_time_ticks().to_milliseconds()
         return milliseconds
     
-    def wait(self, seconds):
+    def wait(self):
 
         correction_secs = -0.0005
 
         passed_seconds = self.get_seconds_ticks()
-        remaining_seconds = seconds - passed_seconds + correction_secs
+        remaining_seconds = self.secs_per_tick - passed_seconds + correction_secs
         if remaining_seconds > 0:
             tm.sleep(remaining_seconds)
 
         # passed_seconds = self.get_seconds_ticks()
-        # remaining_seconds = seconds - passed_seconds
+        # remaining_seconds = self.secs_per_tick - passed_seconds + correction_secs
         # while remaining_seconds > 0:
         #     passed_seconds = self.get_seconds_ticks()
-        #     remaining_seconds = seconds - passed_seconds
+        #     remaining_seconds = self.secs_per_tick - passed_seconds + correction_secs
+
+        # print(self.last_tick_count, self.secs_per_tick, f'{self.get_seconds_total():.3f}', f'{remaining_seconds:.3f}')
 
         self._tick()
 
-        return self.delta_time_ticks.to_seconds()
+        return None
 
 
 class TimeDelta:
