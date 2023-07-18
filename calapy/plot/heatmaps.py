@@ -598,8 +598,11 @@ def single_figure_multi_plots(
             array_annot_i = array_annot[tuple_indexes_rcyx_i]
 
         if add_letters_to_titles:
-            title_i = template_letter_addition_titles.format(
-                subplot_letter=chr(num_letter_start_titles + i)) + titles[tuple_indexes_rc_i].tolist()
+            if titles[tuple_indexes_rc_i] is None:
+                title_i = template_letter_addition_titles.format(subplot_letter=chr(num_letter_start_titles + i))
+            else:
+                title_i = template_letter_addition_titles.format(
+                    subplot_letter=chr(num_letter_start_titles + i)) + titles[tuple_indexes_rc_i].tolist()
         else:
             title_i = titles[tuple_indexes_rc_i]
             if isinstance(title_i, (np.ndarray)):

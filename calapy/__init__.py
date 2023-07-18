@@ -1,6 +1,6 @@
 import datetime
 
-__version__ = '0.1.18.0'
+__version__ = '0.1.18.1'
 
 __release_day__ = 14
 __release_month_num__ = 5
