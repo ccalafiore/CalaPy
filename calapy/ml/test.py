@@ -150,7 +150,7 @@ def feature_classifier(model, loader, criterion):
     print('Test. Loss: {:s}. Accuracy: {:s}.'.format(loss_str_e, accuracy_str_e))
     print()
 
-    time_test = cp_timer.get_delta_time()
+    time_test = cp_timer.get_delta_time_total()
 
     print('Test completed in {d} days {h} hours {m} minutes {s} seconds'.format(
         d=time_test.days, h=time_test.hours,
@@ -405,7 +405,7 @@ def passive_feature_sequence_classifiers(model, loader, directory_outputs=None):
         class_prediction_loss=unweighted_class_prediction_loss_str, accuracy=accuracy_str))
     print()
 
-    time_test = cp_timer.get_delta_time()
+    time_test = cp_timer.get_delta_time_total()
 
     print('Test completed in {d} days {h} hours {m} minutes {s} seconds'.format(
         d=time_test.days, h=time_test.hours,
@@ -851,7 +851,7 @@ def proactive_feature_sequence_classifiers(
             action_loss=unweighted_value_action_loss_str,
             class_prediction_loss=unweighted_class_prediction_loss_str, accuracy=accuracy_str))
 
-    time_training = cp_timer.get_delta_time()
+    time_training = cp_timer.get_delta_time_total()
 
     print('Test completed in {d} days {h} hours {m} minutes {s} seconds'.format(
         d=time_training.days, h=time_training.hours,

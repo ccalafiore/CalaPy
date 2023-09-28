@@ -3,8 +3,10 @@ import torch
 from ... import combinations as cp_combinations
 
 
-class _ConvNd:
+__all__ = ['Conv1d', 'Conv2d', 'Conv3d']
 
+
+class _ConvNd:
 
     def __init__(
             self, nd, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,

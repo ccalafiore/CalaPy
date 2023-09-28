@@ -440,7 +440,7 @@ def passive_feature_sequence_classifiers(
 
     E = e
 
-    time_training = cp_timer.get_delta_time()
+    time_training = cp_timer.get_delta_time_total()
 
     print('Training completed in {d} days {h} hours {m} minutes {s} seconds'.format(
         d=time_training.days, h=time_training.hours,
@@ -456,6 +456,7 @@ def passive_feature_sequence_classifiers(
 def proactive_feature_sequence_classifiers(
         model, loader, delta_preprocessor, optimizer, scheduler, I=10, E=None, T=None,
         epsilon_start=.9, epsilon_end=.2, epsilon_step=-.1, directory_outputs=None):
+
     cp_timer = cp_clock.Timer()
 
     if model.training:
@@ -1163,7 +1164,7 @@ def proactive_feature_sequence_classifiers(
 
     E = e
 
-    time_training = cp_timer.get_delta_time()
+    time_training = cp_timer.get_delta_time_total()
 
     print('Training completed in {d} days {h} hours {m} minutes {s} seconds'.format(
         d=time_training.days, h=time_training.hours,

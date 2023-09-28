@@ -278,19 +278,19 @@ class DQNMethods(TimedOutputMethods):
             slice(0, actions.shape[a], 1) if a != self.axis_models_losses else None
             for a in range(0, actions.ndim, 1)]  # type: list
 
-        if to_numpy:
-            if actions.is_cuda:
-                deltas = actions.cpu().numpy()
-            else:
-                deltas = copy.deepcopy(actions.numpy())
-        else:
-            deltas = copy.deepcopy(actions)
+        deltas = copy.deepcopy(actions)
 
         for a in range(0, self.A, 1):
             indexes_actions[self.axis_models_losses] = a
 
             tup_indexes_actions = tuple(indexes_actions)
 
-            deltas[tup_indexes_actions] = self.possible_actions[a][actions[tup_indexes_actions]].cpu().numpy()
+            deltas[tup_indexes_actions] = self.possible_actions[a][actions[tup_indexes_actions]]
+
+        if to_numpy:
+            if deltas.is_cuda:
+                deltas = deltas.cpu().numpy()
+            else:
+                deltas = deltas.numpy()
 
         return deltas
