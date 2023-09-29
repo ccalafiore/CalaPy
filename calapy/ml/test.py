@@ -413,6 +413,7 @@ def passive_feature_sequence_classifiers(model, loader, directory_outputs=None):
 
     return None
 
+
 def proactive_feature_sequence_classifiers(
         model, loader, delta_preprocessor, T=None, directory_outputs=None):
 

@@ -1,6 +1,6 @@
 
 import torch
-from ... import combinations as cp_combinations
+from .... import combinations as cp_combinations
 
 
 __all__ = ['Conv1d', 'Conv2d', 'Conv3d']
@@ -8,9 +8,8 @@ __all__ = ['Conv1d', 'Conv2d', 'Conv3d']
 
 class _ConvNd:
 
-    def __init__(
-            self, nd, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-            padding_mode='zeros', device=None, dtype=None):
+
+    def __init__(self, nd):
 
         if isinstance(nd, int):
             if nd < 1:
@@ -35,7 +34,6 @@ class _ConvNd:
 
         self.nd = nd
 
-
     def forward(self, input):
 
         """
@@ -54,6 +52,8 @@ class _ConvNd:
             extra_batch_dims = input.ndim - self.max_input_n_dims
             extra_batch_shape = input.shape[slice(0, extra_batch_dims, 1)]
             is_output_initiated = False
+            output = None
+
             for indexes_i in cp_combinations.n_conditions_to_combinations_on_the_fly(
                     n_conditions=extra_batch_shape, dtype='i'):
 
@@ -85,10 +85,7 @@ class Conv1d(_ConvNd, torch.nn.Conv1d):
             stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
             padding_mode=padding_mode, device=device, dtype=dtype)
 
-        _ConvNd.__init__(
-            self=self, nd=1, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
-            padding=padding, dilation=dilation, groups=groups, bias=bias, padding_mode=padding_mode, device=device,
-            dtype=dtype)
+        _ConvNd.__init__(self=self, nd=1)
 
 
 class Conv2d(_ConvNd, torch.nn.Conv2d):
@@ -103,10 +100,7 @@ class Conv2d(_ConvNd, torch.nn.Conv2d):
             stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
             padding_mode=padding_mode, device=device, dtype=dtype)
 
-        _ConvNd.__init__(
-            self=self, nd=2, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
-            padding=padding, dilation=dilation, groups=groups, bias=bias, padding_mode=padding_mode, device=device,
-            dtype=dtype)
+        _ConvNd.__init__(self=self, nd=2)
 
 
 class Conv3d(_ConvNd, torch.nn.Conv3d):
@@ -121,7 +115,4 @@ class Conv3d(_ConvNd, torch.nn.Conv3d):
             stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
             padding_mode=padding_mode, device=device, dtype=dtype)
 
-        _ConvNd.__init__(
-            self=self, nd=3, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
-            padding=padding, dilation=dilation, groups=groups, bias=bias, padding_mode=padding_mode, device=device,
-            dtype=dtype)
+        _ConvNd.__init__(self=self, nd=3)
