@@ -1,6 +1,7 @@
 
 import numpy as np
 import torch
+from ..maths import is_nan
 
 
 def add_noise(x, scale=0.1, mu=0.0, generator=None):
@@ -24,19 +25,27 @@ def add_noise(x, scale=0.1, mu=0.0, generator=None):
     if isinstance(x, (torch.Tensor, np.ndarray)):
 
         sigma_x = torch.std(input=x, dim=None, correction=1, keepdim=False) # .item()
-        sigma_x2 = torch.std(input=x, dim=[a for a in range(0, x.ndim, 1)], correction=1, keepdim=False)
 
-        max_ =torch.max(x)
-        min_ = torch.min(x)
-        diff = max_ - min_
+        # sigma_x2 = torch.std(input=x, dim=[a for a in range(0, x.ndim, 1)], correction=1, keepdim=False)
+        # test = sigma_x == sigma_x2
+        # max_ =torch.max(x)
+        # min_ = torch.min(x)
+        # diff = max_ - min_
 
         sigma = scale * sigma_x
+        if is_nan(sigma) or (sigma == 0.0):
+            # sigma = 0.0
+            if mu == 0.0:
+                return x
+            else:
+                return x + mu
 
-        noise = generate_noise(
-            shape=x.shape, mu=mu, sigma=sigma, generator=generator, dtype=x.dtype, device=x.device,
-            requires_grad=False)
+        else:
+            noise = generate_noise(
+                shape=x.shape, mu=mu, sigma=sigma, generator=generator, dtype=x.dtype, device=x.device,
+                requires_grad=False)
 
-        return x + noise
+            return x + noise
 
     elif isinstance(x, (int, float)):
 
