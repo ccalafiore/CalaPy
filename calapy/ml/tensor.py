@@ -39,12 +39,10 @@ def add_noise(x, scale=0.1, mu=0.0, generator=None):
                 return x
             else:
                 return x + mu
-
         else:
             noise = generate_noise(
                 shape=x.shape, mu=mu, sigma=sigma, generator=generator, dtype=x.dtype, device=x.device,
                 requires_grad=False)
-
             return x + noise
 
     elif isinstance(x, (int, float)):
