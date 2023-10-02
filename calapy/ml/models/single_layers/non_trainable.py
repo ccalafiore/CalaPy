@@ -5,6 +5,8 @@ import torch
 from ..model_tools import ModelMethods as CPModelMethods
 from ... import tensor as cp_tensor
 
+__all__ = ['NoiseLayer']
+
 
 class NoiseLayer(CPModelMethods):
 
