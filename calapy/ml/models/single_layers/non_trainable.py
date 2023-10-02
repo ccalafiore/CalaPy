@@ -17,12 +17,23 @@ class NoiseLayer(CPModelMethods):
             multiplied by the "scale"
         :type scale: float | int
         """
+        name_superclass = NoiseLayer.__name__
+        name_subclass = type(self).__name__
+        if name_superclass == name_subclass:
+            self.superclasses_initiated = []
 
-        CPModelMethods.__init__(self=self, device=None)
+        if CPModelMethods.__name__ not in self.superclasses_initiated:
+            CPModelMethods.__init__(self=self, device=None)
+            if CPModelMethods.__name__ not in self.superclasses_initiated:
+                self.superclasses_initiated.append(CPModelMethods.__name__)
 
         self.mu = 0.0
         # self.sigma = None
         self.scale = scale
+
+        if name_superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(name_superclass)
+
 
     def forward(self, x, generator=None):
         """

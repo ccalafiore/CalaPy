@@ -23,7 +23,13 @@ def add_noise(x, scale=0.1, mu=0.0, generator=None):
 
     if isinstance(x, (torch.Tensor, np.ndarray)):
 
-        sigma_x = torch.std(input=x, dim=None, correction=1, keepdim=False)  # .item()
+        sigma_x = torch.std(input=x, dim=None, correction=1, keepdim=False) # .item()
+        sigma_x2 = torch.std(input=x, dim=[a for a in range(0, x.ndim, 1)], correction=1, keepdim=False)
+
+        max_ =torch.max(x)
+        min_ = torch.min(x)
+        diff = max_ - min_
+
         sigma = scale * sigma_x
 
         noise = generate_noise(
