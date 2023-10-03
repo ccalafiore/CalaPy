@@ -1,9 +1,9 @@
 import numpy as np
 import math
 import itertools
-from . import format as cc_format
-from . import array as cc_array
-from . import maths as cc_maths
+from . import format as cp_format
+from . import array as cp_array
+from . import maths as cp_maths
 
 
 def n_conditions_to_combinations(
@@ -31,7 +31,7 @@ def n_conditions_to_combinations(
         variables = np.arange(n_variables)
         # n_conditions = np.asarray(n_conditions, dtype=int)
         # conditions = n_conditions_to_conditions(n_conditions)
-        n_combinations = cc_maths.prod(n_conditions) * n_repetitions_combinations
+        n_combinations = cp_maths.prod(n_conditions) * n_repetitions_combinations
 
         # axis_combinations = int(not(bool(axis_variables)))
         axis_variables = int(not(bool(axis_combinations)))
@@ -77,7 +77,7 @@ def n_conditions_to_combinations(
         indexes_combinations[axis_combinations] = slice(None)
 
         # combinations[tuple(indexes_combinations)] = np.expand_dims(
-        #     cc_array.pad_array_from_n_samples_target(conditions[-1], n_samples_target=n_combinations),
+        #     cp_array.pad_array_from_n_samples_target(conditions[-1], n_samples_target=n_combinations),
         #     axis=axis_variables)
         cumulative_n_combinations = n_conditions[i_variable]
         for i_variable in variables_in_order[1:]:
@@ -90,7 +90,7 @@ def n_conditions_to_combinations(
 
             indexes_combinations[axis_variables] = i_variable
             if cumulative_combinations.size < n_combinations:
-                combinations[tuple(indexes_combinations)] = cc_array.pad_array_from_n_samples_target(
+                combinations[tuple(indexes_combinations)] = cp_array.pad_array_from_n_samples_target(
                     cumulative_combinations, n_samples_target=n_combinations)
             elif cumulative_combinations.size == n_combinations:
                 combinations[tuple(indexes_combinations)] = cumulative_combinations
@@ -115,7 +115,7 @@ def n_conditions_to_combinations_on_the_fly(
         n_conditions = np.asarray([n_conditions], dtype='i')
         n_variables = 1
 
-    n_combinations = cc_maths.prod(n_conditions)
+    n_combinations = cp_maths.prod(n_conditions)
 
     combination_i = np.empty(n_variables, dtype=dtype)
     combination_i[:] = 0
@@ -163,7 +163,7 @@ def conditions_to_combinations_on_the_fly(
         conditions = conditions_raw
 
     n_conditions = conditions_to_n_conditions(conditions)
-    n_combinations = cc_maths.prod(n_conditions)
+    n_combinations = cp_maths.prod(n_conditions)
 
     n_variables = len(n_conditions)
 
@@ -292,7 +292,7 @@ def conditions_to_combinations(
         variables = np.arange(n_variables)
         # conditions = np.asarray(conditions, dtype=object)
         n_conditions = conditions_to_n_conditions(conditions)
-        n_combinations = cc_maths.prod(n_conditions) * n_repetitions_combinations
+        n_combinations = cp_maths.prod(n_conditions) * n_repetitions_combinations
 
         if dtype is None:
             dtype = type(conditions[0][0])
@@ -346,7 +346,7 @@ def conditions_to_combinations(
         indexes_combinations[axis_combinations] = slice(None)
 
         # combinations[tuple(indexes_combinations)] = np.expand_dims(
-        #     cc_array.pad_array_from_n_samples_target(conditions[-1], n_samples_target=n_combinations),
+        #     cp_array.pad_array_from_n_samples_target(conditions[-1], n_samples_target=n_combinations),
         #     axis=axis_variables)
         cumulative_n_combinations = n_conditions[i_variable]
         for i_variable in variables_in_order[1:]:
@@ -359,7 +359,7 @@ def conditions_to_combinations(
 
             indexes_combinations[axis_variables] = i_variable
             if cumulative_combinations.size < n_combinations:
-                combinations[tuple(indexes_combinations)] = cc_array.pad_array_from_n_samples_target(
+                combinations[tuple(indexes_combinations)] = cp_array.pad_array_from_n_samples_target(
                     cumulative_combinations, n_samples_target=n_combinations)
             elif cumulative_combinations.size == n_combinations:
                 combinations[tuple(indexes_combinations)] = cumulative_combinations
@@ -493,7 +493,7 @@ def exclude(conditions, values=-1, variables=None):
     for i_variable in range(n_variables):
         if i_variable in variables:
             conditions[i_variable] = conditions[i_variable][
-                cc_array.samples_in_arr1_are_not_in_arr2(conditions[i_variable], values)]
+                cp_array.samples_in_arr1_are_not_in_arr2(conditions[i_variable], values)]
     return conditions
 
 
@@ -509,13 +509,13 @@ def conditions_to_phases_of_blocks_of_shuffled_combinations(
         variables_split=variables_split,
         n_repetitions_variables_repeated_per_shuffle=n_repetitions_variables_repeated_per_shuffle)
 
-    dict_arguments = cc_format.format_shape_arguments(dict_arguments, n_phases)
+    dict_arguments = cp_format.format_shape_arguments(dict_arguments, n_phases)
     n_repetitions_combinations = dict_arguments['n_repetitions_combinations']
     n_repetitions_variables_repeated_per_block = dict_arguments['n_repetitions_variables_repeated_per_block']
     variables_split = dict_arguments['variables_split']
     n_repetitions_variables_repeated_per_shuffle = dict_arguments['n_repetitions_variables_repeated_per_shuffle']
 
-    # dict_arguments = cc_format.format_shape_arguments(dict_arguments, n_phases)
+    # dict_arguments = cp_format.format_shape_arguments(dict_arguments, n_phases)
     # locals().update(dict_arguments)
 
     phases_of_blocks_of_shuffled_combinations = np.empty(n_phases, dtype=object)
@@ -544,7 +544,7 @@ def n_conditions_to_phases_of_blocks_of_shuffled_combinations(
         variables_split=variables_split,
         n_repetitions_variables_repeated_per_shuffle=n_repetitions_variables_repeated_per_shuffle)
 
-    dict_arguments = cc_format.format_shape_arguments(dict_arguments, n_phases)
+    dict_arguments = cp_format.format_shape_arguments(dict_arguments, n_phases)
 
     n_repetitions_combinations = dict_arguments['n_repetitions_combinations']
     n_repetitions_variables_repeated_per_block = dict_arguments['n_repetitions_variables_repeated_per_block']
@@ -639,16 +639,16 @@ def conditions_to_blocks_of_shuffled_combinations(
 
         conditions_variables_split = conditions[variables_split]
         n_conditions_variables_split = n_conditions[variables_split]
-        n_combinations_variables_split = cc_maths.prod(n_conditions_variables_split)
+        n_combinations_variables_split = cp_maths.prod(n_conditions_variables_split)
 
-    n_combinations_variables_repeated = cc_maths.prod(n_conditions_variables_repeated)
+    n_combinations_variables_repeated = cp_maths.prod(n_conditions_variables_repeated)
 
     n_trials_variables_repeated = n_combinations_variables_repeated * n_repetitions_combinations
 
     n_trials_per_block = n_combinations_variables_repeated * n_repetitions_variables_repeated_per_block
 
     if n_trials % n_trials_per_block != 0:
-        possibles_n_repetitions_variables_repeated_per_block = cc_maths.factors_of_x(
+        possibles_n_repetitions_variables_repeated_per_block = cp_maths.factors_of_x(
             n_trials // n_combinations_variables_repeated)
 
         raise Exception(
@@ -667,7 +667,7 @@ def conditions_to_blocks_of_shuffled_combinations(
 
     if n_trials % n_trials_per_shuffle != 0:
 
-        possibles_n_repetitions_variables_repeated_per_shuffle = cc_maths.factors_of_x(
+        possibles_n_repetitions_variables_repeated_per_shuffle = cp_maths.factors_of_x(
             n_trials // n_combinations_variables_repeated)
 
         raise Exception(
@@ -709,7 +709,7 @@ def conditions_to_blocks_of_shuffled_combinations(
                 np.arange(n_variables_split) != i_variable_split]
 
             min_trials_of_1_single_variable_split_per_block[i_variable_split] = \
-                (n_combinations_variables_repeated * cc_maths.prod(
+                (n_combinations_variables_repeated * cp_maths.prod(
                     n_conditions_variables_split_not_in_variables_split) *
                  n_repetitions_combinations) // n_blocks
 
@@ -769,7 +769,7 @@ def conditions_to_blocks_of_shuffled_combinations(
 
                             extra_available_conditions_variables_split_per_i_block[i_variable_split], \
                                 available_conditions_variables_split_per_i_block[i_block][i_variable_split] = \
-                                cc_array.transfer_n_random_samples_from_arr1_to_arr2(
+                                cp_array.transfer_n_random_samples_from_arr1_to_arr2(
                                     extra_available_conditions_variables_split_per_i_block[i_variable_split],
                                     available_conditions_variables_split_per_i_block[i_block][i_variable_split],
                                     n_samples=1, axis=0, replace=False)
@@ -801,7 +801,7 @@ def conditions_to_blocks_of_shuffled_combinations(
 
                         for i_variable_split in range(n_variables_split):
                             tmp_logical_index_available_combinations_variables_split_per_i_block_per_i_trial[
-                                slice(None), i_variable_split] = cc_array.samples_in_arr1_are_in_arr2(
+                                slice(None), i_variable_split] = cp_array.samples_in_arr1_are_in_arr2(
                                     available_combinations_variables_split_per_i_trial[:, i_variable_split],
                                     available_conditions_variables_split_per_i_block[i_block][i_variable_split])
 
@@ -1142,7 +1142,7 @@ def conditions_to_blocks_of_shuffled_combinations(
                 'n_unused_trials should be 0. From tmp_trials, n_unused_trials was {}.'.format(n_unused_trials))
 
     for i_block in range(n_blocks):
-        trials_blocks[i_block] = cc_array.shuffle_in_windows(
+        trials_blocks[i_block] = cp_array.shuffle_in_windows(
             trials_blocks[i_block], n_samples_window=n_trials_per_shuffle,
             n_windows=None, axis=axis_combinations, dtype=None)
 
@@ -1160,11 +1160,11 @@ def conditions_to_P_random_permutetions(conditions, R=None, P=None, dtype=None):
     if R == C or R is None:
         n = math.factorial(C)
     else:
-        n = cc_maths.convert_to_int_or_float(math.factorial(C) / math.factorial(C - R))
+        n = cp_maths.convert_to_int_or_float(math.factorial(C) / math.factorial(C - R))
 
     if P is None or P >= n:
         permutations = conditions_to_permutations(conditions, R)
-        permutations = cc_array.shuffle_in_any_dimension(permutations, 0)
+        permutations = cp_array.shuffle_in_any_dimension(permutations, 0)
         return permutations
 
     else:
@@ -1172,7 +1172,7 @@ def conditions_to_P_random_permutetions(conditions, R=None, P=None, dtype=None):
         positions = np.arange(R)
 
         permutations_indexes = conditions_to_permutations(indexes_cond, R, dtype='i')
-        permutations_indexes = cc_array.shuffle_in_any_dimension(permutations_indexes, 0)
+        permutations_indexes = cp_array.shuffle_in_any_dimension(permutations_indexes, 0)
 
         max_per_pos = math.ceil(20 / C)
         frequencies = np.empty([C, R], dtype='i')

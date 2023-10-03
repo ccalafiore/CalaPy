@@ -12,18 +12,20 @@ class ModelMethods(torch.nn.Module):
 
     def __init__(self, device: typing.Union[torch.device, str, None] = None):
 
-        name_superclass = ModelMethods.__name__
-        name_subclass = type(self).__name__
-        if name_superclass == name_subclass:
+        superclass = ModelMethods
+        subclass = type(self)
+        if superclass == subclass:
             self.superclasses_initiated = []
 
-        if torch.nn.Module.__name__ not in self.superclasses_initiated:
+        if torch.nn.Module not in self.superclasses_initiated:
             torch.nn.Module.__init__(self=self)
-            self.superclasses_initiated.append(torch.nn.Module.__name__)
+            if torch.nn.Module not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Module)
 
         self.device = self.init_device(device=device)
 
-        self.superclasses_initiated.append(name_superclass)
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def freeze(self):
         # Now set requires_grad to false

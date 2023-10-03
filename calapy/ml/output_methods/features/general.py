@@ -51,13 +51,15 @@ class OutputMethods:
             self, axis_features_outs: int, axis_models_losses: int, M: int,
             loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
-        name_superclass = OutputMethods.__name__
-        name_subclass = type(self).__name__
-        if name_subclass == name_superclass:
+        superclass = OutputMethods
+        subclass = type(self)
+        if subclass == superclass:
             self.superclasses_initiated = []
 
-        # if cc_ModelMethods.__name__ not in self.superclasses_initiated:
-        #     cc_ModelMethods.__init__(self=self, device=device)
+        # if cp_ModelMethods not in self.superclasses_initiated:
+        #     cp_ModelMethods.__init__(self=self, device=device)
+        #     if cp_ModelMethods not in self.superclasses_initiated:
+        #         self.superclasses_initiated.append(cp_ModelMethods)
 
         if isinstance(axis_features_outs, int):
             self.axis_features_outs = axis_features_outs
@@ -81,7 +83,8 @@ class OutputMethods:
 
         self.loss_weights = set_loss_weights(M=self.M, loss_weights=loss_weights)
 
-        self.superclasses_initiated.append(name_superclass)
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def reduce_losses(
             self, losses: typing.Union[torch.Tensor, np.ndarray],
@@ -216,9 +219,9 @@ class TimedOutputMethods(OutputMethods):
             self, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, M: int,
             loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
-        name_superclass = TimedOutputMethods.__name__
-        name_subclass = type(self).__name__
-        if name_subclass == name_superclass:
+        superclass = TimedOutputMethods
+        subclass = type(self)
+        if subclass == superclass:
             self.superclasses_initiated = []
 
         self.n_axes_outs = 3
@@ -267,10 +270,12 @@ class TimedOutputMethods(OutputMethods):
         self.axes_non_models_losses = np.asarray(
             [a for a in self.axes_losses if a != self.axis_models_losses], dtype='i')
 
-        if OutputMethods.__name__ not in self.superclasses_initiated:
+        if OutputMethods not in self.superclasses_initiated:
             OutputMethods.__init__(
                 self=self, axis_features_outs=self.axis_features_outs,
                 axis_models_losses=self.axis_models_losses, M=M, loss_weights=loss_weights)
+            if OutputMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(OutputMethods)
 
         self.axis_batch_losses_trials = 0
         self.axis_models_losses_trials = 1
@@ -303,7 +308,8 @@ class TimedOutputMethods(OutputMethods):
         #     dtype='i')
         # self.shape_losses = np.asarray([-1 for a in range(0, self.n_axes_losses, 1)], dtype='i')
 
-        self.superclasses_initiated.append(name_superclass)
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def compute_losses_trials(self, losses):
 

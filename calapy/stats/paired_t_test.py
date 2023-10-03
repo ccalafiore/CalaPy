@@ -3,7 +3,7 @@ from scipy.stats import t
 # from scipy.stats.stats import _ttest_finish
 from ..combinations import n_conditions_to_combinations
 from ..array import samples_in_arr1_are_in_arr2, advanced_indexing
-from . import descriptive as cc_stats_descriptive
+from . import descriptive as cp_stats_descriptive
 
 
 def scores_raw_to_scores_formatted(scores_raw, axis_comparisons, dtype=None):
@@ -113,7 +113,7 @@ def scores_raw_to_paired_t_test(
 
     axis_comparisons_formatted = axis_comparisons
 
-    diff = cc_stats_descriptive.scores_to_diff_of_scores(
+    diff = cp_stats_descriptive.scores_to_diff_of_scores(
         scores_formatted, axis=axis_comparisons_formatted, keepdims=keepdims)
 
     if keepdims:
@@ -122,9 +122,9 @@ def scores_raw_to_paired_t_test(
         axis_samples_diff = axis_samples_formatted - (axis_samples_formatted > axis_comparisons_formatted)
 
     n_samples = np.sum(np.logical_not(np.isnan(diff)), axis=axis_samples_diff, keepdims=keepdims)
-    means_of_diff = cc_stats_descriptive.scores_to_means(
+    means_of_diff = cp_stats_descriptive.scores_to_means(
         diff, axes=axis_samples_diff, keepdims=keepdims)
-    std_err_of_diff = cc_stats_descriptive.scores_to_standard_errors(
+    std_err_of_diff = cp_stats_descriptive.scores_to_standard_errors(
         diff, axis_samples=axis_samples_diff, keepdims=keepdims)
 
     t_values = means_of_diff / std_err_of_diff
@@ -165,7 +165,7 @@ def scores_formatted_to_paired_t_test(
     axis_samples_formatted = axis_samples % n_axes_scores_formatted
     axis_comparisons_formatted = axis_comparisons % n_axes_scores_formatted
 
-    diff = cc_stats_descriptive.scores_to_diff_of_scores(
+    diff = cp_stats_descriptive.scores_to_diff_of_scores(
         scores_formatted, axis=axis_comparisons_formatted, keepdims=keepdims)
 
     if keepdims:
@@ -174,9 +174,9 @@ def scores_formatted_to_paired_t_test(
         axis_samples_diff = axis_samples_formatted - (axis_samples_formatted > axis_comparisons_formatted)
 
     n_samples = np.sum(np.logical_not(np.isnan(diff)), axis=axis_samples_diff, keepdims=keepdims)
-    means_of_diff = cc_stats_descriptive.scores_to_means(
+    means_of_diff = cp_stats_descriptive.scores_to_means(
         diff, axes=axis_samples_diff, keepdims=keepdims)
-    std_err_of_diff = cc_stats_descriptive.scores_to_standard_errors(
+    std_err_of_diff = cp_stats_descriptive.scores_to_standard_errors(
         diff, axis_samples=axis_samples_diff, keepdims=keepdims)
 
     t_values = means_of_diff / std_err_of_diff
@@ -217,9 +217,9 @@ def diff_to_paired_t_test(
     axis_samples_diff = axis_samples % n_axes_diff
 
     n_samples = np.sum(np.logical_not(np.isnan(diff)), axis=axis_samples_diff, keepdims=keepdims)
-    means_of_diff = cc_stats_descriptive.scores_to_means(
+    means_of_diff = cp_stats_descriptive.scores_to_means(
         diff, axes=axis_samples_diff, keepdims=keepdims)
-    std_err_of_diff = cc_stats_descriptive.scores_to_standard_errors(
+    std_err_of_diff = cp_stats_descriptive.scores_to_standard_errors(
         diff, axis_samples=axis_samples_diff, keepdims=keepdims)
 
     t_values = means_of_diff / std_err_of_diff

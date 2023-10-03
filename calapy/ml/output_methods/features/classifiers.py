@@ -16,9 +16,9 @@ class ClassifierMethods(OutputMethods):
             loss_weights_classifiers: (
                     typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor]) = None) -> None:
 
-        name_superclass = ClassifierMethods.__name__
-        name_subclass = type(self).__name__
-        if name_subclass == name_superclass:
+        superclass = ClassifierMethods
+        subclass = type(self)
+        if subclass == superclass:
             self.superclasses_initiated = []
 
         if isinstance(C, int):
@@ -31,17 +31,20 @@ class ClassifierMethods(OutputMethods):
 
         self.loss_weights_classifiers = set_loss_weights(M=self.C, loss_weights=loss_weights_classifiers)
 
-        if OutputMethods.__name__ not in self.superclasses_initiated:
+        if OutputMethods not in self.superclasses_initiated:
             OutputMethods.__init__(
                 self=self, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, M=self.C, loss_weights=self.loss_weights_classifiers)
+            if OutputMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(OutputMethods)
 
         self.criterion_predictions_classes = torch.nn.CrossEntropyLoss(reduction='none')
         self.criterion_predictions_classes_reduction = torch.nn.CrossEntropyLoss(reduction='mean')
 
         self.softmax = torch.nn.Softmax(dim=self.axis_features_outs)
 
-        self.superclasses_initiated.append(name_superclass)
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def compute_probabilities(self, predictions_classes):
 
@@ -161,19 +164,24 @@ class TimedClassifierMethods(TimedOutputMethods, ClassifierMethods):
             self, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, C: int,
             loss_weights_classifiers: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
-        name_superclass = TimedClassifierMethods.__name__
-        name_subclass = type(self).__name__
-        if name_subclass == name_superclass:
+        superclass = TimedClassifierMethods
+        subclass = type(self)
+        if subclass == superclass:
             self.superclasses_initiated = []
 
-        if ClassifierMethods.__name__ not in self.superclasses_initiated:
+        if ClassifierMethods not in self.superclasses_initiated:
             ClassifierMethods.__init__(
                 self, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, C=C, loss_weights_classifiers=loss_weights_classifiers)
+            if ClassifierMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(ClassifierMethods)
 
-        if TimedOutputMethods.__name__ not in self.superclasses_initiated:
+        if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
                 self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, M=self.C,  loss_weights=self.loss_weights_classifiers)
+            if TimedOutputMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(TimedOutputMethods)
 
-        self.superclasses_initiated.append(name_superclass)
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)

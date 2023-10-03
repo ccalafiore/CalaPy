@@ -1,20 +1,30 @@
 
 import torch
 from .... import combinations as cp_combinations
-
+from ..model_tools import ModelMethods as CPModelMethods
 
 __all__ = ['RNN', 'LSTM', 'GRU']
 
 
-class _Recurrent:
-
+class _Recurrent(CPModelMethods):
 
     def __init__(self):
+
+        superclass = _Recurrent
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
+
+        if CPModelMethods not in self.superclasses_initiated:
+            CPModelMethods.__init__(self=self, device=None)
+            if CPModelMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(CPModelMethods)
 
         self.min_input_n_dims = 1
         self._torch_max_input_n_dims = 2
 
-        self.nd = nd
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def forward(self, input):
 
@@ -62,9 +72,25 @@ class RNN(_Recurrent, torch.nn.RNNCell):
             self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
             padding_mode='zeros', device=None, dtype=None):
 
-        torch.nn.RNN.__init__(
-            self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
-            padding_mode=padding_mode, device=device, dtype=dtype)
+        superclass = RNN
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
 
-        _Recurrent.__init__(self=self)
+        if torch.nn.RNNCell not in self.superclasses_initiated:
+            torch.nn.RNNCell.__init__(
+                self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
+                stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+                padding_mode=padding_mode, device=device, dtype=dtype)
+            if torch.nn.RNNCell not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.RNNCell)
+
+        if _Recurrent not in self.superclasses_initiated:
+            _Recurrent.__init__(self=self)
+            if _Recurrent not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_Recurrent)
+
+        # define attributes here
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)

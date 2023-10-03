@@ -4,7 +4,7 @@ from ..maths import convert_to_int_or_float, rint
 from ..array import FloatRange
 from ..combinations import (
     conditions_to_combinations_on_the_fly as
-    cc_conditions_to_combinations_on_the_fly)
+    cp_conditions_to_combinations_on_the_fly)
 
 
 def import_pygame():
@@ -426,7 +426,7 @@ class Frame:
             points_x = [points_x]
         if not isinstance(points_y, (list, tuple, np.ndarray)):
             points_y = [points_y]
-        for (j, i), point_ji in cc_conditions_to_combinations_on_the_fly([points_x, points_y], order_outputs='iv'):
+        for (j, i), point_ji in cp_conditions_to_combinations_on_the_fly([points_x, points_y], order_outputs='iv'):
             self.blit(
                 sources[j][i], point_ji, alignment_x=alignment_x, alignment_y=alignment_y,
                 area_sources=area_sources, special_flags=special_flags)

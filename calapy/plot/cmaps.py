@@ -2,7 +2,7 @@ import numpy as np
 import math
 from copy import deepcopy
 from . import colors
-# from .. import maths as cc_maths
+# from .. import maths as cp_maths
 
 
 class ColorMap:

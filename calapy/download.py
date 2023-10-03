@@ -1,11 +1,11 @@
 from os.path import isfile as os_path_isfile
 from time import sleep
-from . import clock as cc_clock
+from . import clock as cp_clock
 
 
 def wait_downloading(directory_saved_as, max_seconds_wait=60):
 
-    timer = cc_clock.Timer()
+    timer = cp_clock.Timer()
     wait = True
     while wait:
 

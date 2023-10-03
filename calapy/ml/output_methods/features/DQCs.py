@@ -21,9 +21,9 @@ class DQCMethods(DQNMethods, TimedClassifierMethods):
             gamma: typing.Union[int, float] = .999, reward_bias: typing.Union[int, float] = .0,
             loss_weights: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None) -> None:
 
-        name_superclass = DQCMethods.__name__
-        name_subclass = type(self).__name__
-        if name_superclass == name_subclass:
+        superclass = DQCMethods
+        subclass = type(self)
+        if superclass == subclass:
             self.superclasses_initiated = []
 
         self.possible_tasks = ['A', 'C']
@@ -59,31 +59,37 @@ class DQCMethods(DQNMethods, TimedClassifierMethods):
         C = len(self.indexes_outs_classifiers)
         M = A + C
 
-        if TimedOutputMethods.__name__ not in self.superclasses_initiated:
-
+        if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
                 self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, M=M, loss_weights=loss_weights)
+            if TimedOutputMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(TimedOutputMethods)
 
-        if DQNMethods.__name__ not in self.superclasses_initiated:
-
+        if DQNMethods not in self.superclasses_initiated:
             loss_weights_actors = [self.loss_weights[self.indexes_outs_actors[a]] for a in range(0, A, 1)]
-
             DQNMethods.__init__(
                 self=self, possible_actions=possible_actions, axis_batch_outs=axis_batch_outs,
                 axis_features_outs=axis_features_outs, axis_models_losses=axis_models_losses,
                 movement_type=movement_type, same_actions=same_actions, gamma=gamma, reward_bias=reward_bias,
                 loss_weights_actors=loss_weights_actors)
+            if DQNMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(DQNMethods)
 
-        if TimedClassifierMethods.__name__ not in self.superclasses_initiated:
+        if TimedClassifierMethods not in self.superclasses_initiated:
             loss_weights_classifiers = [
                 self.loss_weights[self.indexes_outs_classifiers[c]] for c in range(0, C, 1)]
             TimedClassifierMethods.__init__(
                 self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, C=C, loss_weights_classifiers=loss_weights_classifiers)
+            if TimedClassifierMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(TimedClassifierMethods)
 
         self.loss_weights_tasks = set_loss_weights(
             M=self.n_possible_tasks, loss_weights=[sum(self.loss_weights_actors), sum(self.loss_weights_classifiers)])
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def split(self, outs: typing.Union[list, tuple]):
 

@@ -1,15 +1,27 @@
 
+
+import os.path
 import torch
 from .... import combinations as cp_combinations
+from ..model_tools import ModelMethods as CPModelMethods
 
 
 __all__ = ['Conv1d', 'Conv2d', 'Conv3d']
 
 
-class _ConvNd:
-
+class _ConvNd(CPModelMethods):
 
     def __init__(self, nd):
+
+        superclass = _ConvNd
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
+
+        if CPModelMethods not in self.superclasses_initiated:
+            CPModelMethods.__init__(self=self, device=None)
+            if CPModelMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(CPModelMethods)
 
         if isinstance(nd, int):
             if nd < 1:
@@ -33,6 +45,9 @@ class _ConvNd:
             raise TypeError('nd')
 
         self.nd = nd
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def forward(self, input):
 
@@ -80,27 +95,54 @@ class Conv1d(_ConvNd, torch.nn.Conv1d):
             self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
             padding_mode='zeros', device=None, dtype=None):
 
-        torch.nn.Conv1d.__init__(
-            self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
-            padding_mode=padding_mode, device=device, dtype=dtype)
+        superclass = Conv1d
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
 
-        _ConvNd.__init__(self=self, nd=1)
+        if torch.nn.Conv1d not in self.superclasses_initiated:
+            torch.nn.Conv1d.__init__(
+                self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
+                stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+                padding_mode=padding_mode, device=device, dtype=dtype)
+            if torch.nn.Conv1d not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Conv1d)
+
+        if _ConvNd not in self.superclasses_initiated:
+            _ConvNd.__init__(self=self, nd=1)
+            if _ConvNd not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_ConvNd)
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
 
 class Conv2d(_ConvNd, torch.nn.Conv2d):
-
 
     def __init__(
             self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
             padding_mode='zeros', device=None, dtype=None):
 
-        torch.nn.Conv2d.__init__(
-            self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
-            padding_mode=padding_mode, device=device, dtype=dtype)
+        superclass = Conv2d
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
 
-        _ConvNd.__init__(self=self, nd=2)
+        if torch.nn.Conv2d not in self.superclasses_initiated:
+            torch.nn.Conv2d.__init__(
+                self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
+                stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+                padding_mode=padding_mode, device=device, dtype=dtype)
+            if torch.nn.Conv2d not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Conv2d)
+
+        if _ConvNd not in self.superclasses_initiated:
+            _ConvNd.__init__(self=self, nd=2)
+            if _ConvNd not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_ConvNd)
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
 
 class Conv3d(_ConvNd, torch.nn.Conv3d):
@@ -110,9 +152,23 @@ class Conv3d(_ConvNd, torch.nn.Conv3d):
             self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
             padding_mode='zeros', device=None, dtype=None):
 
-        torch.nn.Conv3d.__init__(
-            self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
-            padding_mode=padding_mode, device=device, dtype=dtype)
+        superclass = Conv3d
+        name_subclass = type(self)
+        if superclass == name_subclass:
+            self.superclasses_initiated = []
 
-        _ConvNd.__init__(self=self, nd=3)
+        if torch.nn.Conv3d not in self.superclasses_initiated:
+            torch.nn.Conv3d.__init__(
+                self=self, in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
+                stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+                padding_mode=padding_mode, device=device, dtype=dtype)
+            if torch.nn.Conv3d not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Conv3d)
+
+        if _ConvNd not in self.superclasses_initiated:
+            _ConvNd.__init__(self=self, nd=3)
+            if _ConvNd not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_ConvNd)
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)

@@ -2,14 +2,14 @@
 
 from ... import torch as pt
 from ....ml import devices as cp_device
-from ..model_tools import ModelMethods as cc_ModelMethods
+from ..model_tools import ModelMethods as cp_ModelMethods
 from ....maths import prod as cp_prod
 import numpy as np
 import math
 import typing
 
 
-class ProactiveFeatureSequenceClassifier(cc_ModelMethods):
+class ProactiveFeatureSequenceClassifier(cp_ModelMethods):
 
     def __init__(
             self, n_features_inputs_lstm: int, n_features_outs_lstm: int,

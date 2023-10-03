@@ -19,9 +19,9 @@ class DQNMethods(TimedOutputMethods):
             gamma: typing.Union[int, float] = .999, reward_bias: typing.Union[int, float] = .0,
             loss_weights_actors: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None) -> None:
 
-        name_superclass = DQNMethods.__name__
-        name_subclass = type(self).__name__
-        if name_subclass == name_superclass:
+        superclass = DQNMethods
+        subclass = type(self)
+        if subclass == superclass:
             self.superclasses_initiated = []
 
         if isinstance(possible_actions, list):
@@ -53,10 +53,12 @@ class DQNMethods(TimedOutputMethods):
         self.possible_actions = tuple(self.possible_actions)
         self.n_possible_actions = tuple(self.n_possible_actions)
 
-        if TimedOutputMethods.__name__ not in self.superclasses_initiated:
+        if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
                 self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, M=self.A, loss_weights=self.loss_weights_actors)
+            if TimedOutputMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(TimedOutputMethods)
 
         if isinstance(movement_type, str):
             if movement_type.lower() in ['proactive', 'random', 'same']:
@@ -87,7 +89,8 @@ class DQNMethods(TimedOutputMethods):
         self.criterion_values_actions = torch.nn.SmoothL1Loss(reduction='none')
         self.criterion_values_actions_reduction = torch.nn.SmoothL1Loss(reduction='mean')
 
-        self.superclasses_initiated.append(name_superclass)
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
 
     def sample_action(self, values_actions: [list, torch.Tensor], epsilon=.1):
 

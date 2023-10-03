@@ -2,8 +2,8 @@ import numpy as np
 import math
 import numbers
 # from copy import deepcopy
-# from . import combinations as cc_combinations
-from . import maths as cc_maths
+# from . import combinations as cp_combinations
+from . import maths as cp_maths
 # from .maths import convert_to_int_or_float, rint
 
 
@@ -431,7 +431,7 @@ def split_by_percentages(array, p_samples, axis=0, shuffle=False, sort=False):
     M = np.empty(S, dtype='i')
 
     for s in range(S):
-        M[s] = cc_maths.rint(N / 100 * p_samples[s])
+        M[s] = cp_maths.rint(N / 100 * p_samples[s])
 
     sum_M = M.sum()
     if sum_M != N:
@@ -728,10 +728,10 @@ class FloatRange:
         else:
             raise TypeError('range_raw')
 
-        self.start = cc_maths.convert_to_int_or_float(start)
-        self.stop = cc_maths.convert_to_int_or_float(stop)
-        self.step = cc_maths.convert_to_int_or_float(step)
-        self.len = abs(cc_maths.convert_to_int_or_float((self.stop - self.start) / self.step))
+        self.start = cp_maths.convert_to_int_or_float(start)
+        self.stop = cp_maths.convert_to_int_or_float(stop)
+        self.step = cp_maths.convert_to_int_or_float(step)
+        self.len = abs(cp_maths.convert_to_int_or_float((self.stop - self.start) / self.step))
 
     # def __init__(self, stop, *args):
     #
@@ -751,7 +751,7 @@ class FloatRange:
     #     else:
     #         raise TypeError('MyRange expected at most 3 arguments, got {}'.format(n_args + 1))
     #
-    #     self.len = cc_maths.convert_to_int_or_float((self.stop - self.start) / self.step)
+    #     self.len = cp_maths.convert_to_int_or_float((self.stop - self.start) / self.step)
     #     # self.len = (self.stop - self.start) / self.step
 
     def starts_of_n_within_equal_ranges(self, n):
