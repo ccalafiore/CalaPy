@@ -54,9 +54,7 @@ class _ConvNd(CPModelMethods):
         """
 
         :type input: torch.Tensor
-
         :rtype: torch.Tensor
-
         """
 
         if input.ndim < self.min_input_n_dims:
@@ -107,6 +105,8 @@ class Conv1d(_ConvNd, torch.nn.Conv1d):
                 padding_mode=padding_mode, device=device, dtype=dtype)
             if torch.nn.Conv1d not in self.superclasses_initiated:
                 self.superclasses_initiated.append(torch.nn.Conv1d)
+            if torch.nn.Module not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Module)
 
         if _ConvNd not in self.superclasses_initiated:
             _ConvNd.__init__(self=self, nd=1)
@@ -135,6 +135,8 @@ class Conv2d(_ConvNd, torch.nn.Conv2d):
                 padding_mode=padding_mode, device=device, dtype=dtype)
             if torch.nn.Conv2d not in self.superclasses_initiated:
                 self.superclasses_initiated.append(torch.nn.Conv2d)
+            if torch.nn.Module not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Module)
 
         if _ConvNd not in self.superclasses_initiated:
             _ConvNd.__init__(self=self, nd=2)
@@ -164,6 +166,8 @@ class Conv3d(_ConvNd, torch.nn.Conv3d):
                 padding_mode=padding_mode, device=device, dtype=dtype)
             if torch.nn.Conv3d not in self.superclasses_initiated:
                 self.superclasses_initiated.append(torch.nn.Conv3d)
+            if torch.nn.Module not in self.superclasses_initiated:
+                self.superclasses_initiated.append(torch.nn.Module)
 
         if _ConvNd not in self.superclasses_initiated:
             _ConvNd.__init__(self=self, nd=3)

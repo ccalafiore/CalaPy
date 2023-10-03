@@ -53,13 +53,23 @@ class ModelMethods(torch.nn.Module):
 
         return self.device
 
-    def get_device(self: torch.nn.Module):
+    def get_device(self):
         no_param = True
-        for param_model in self.parameters():
-            no_param = False
+        for param_model in self.parameters(recurse=True):
             self.device = param_model.device
+            no_param = False
             break
         if no_param:
             self.device = None
         return self.device
 
+    def get_dtype(self):
+        no_param = True
+        for param_model in self.parameters(recurse=True):
+            self.dtype = param_model.dtype
+            no_param = False
+            break
+        if no_param:
+            self.dtype = None
+
+        return self.dtype
