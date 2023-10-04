@@ -38,9 +38,14 @@ class _Recurrent(CPModelMethods):
         if axis_time is None:
             self.axis_time = axis_time
             self.is_timed = False
+            self.forward = self._forward_without_time_axis
         elif isinstance(axis_time, int):
-            self.axis_time = axis_time
-            self.is_timed = True
+            if axis_time < 0:
+                raise ValueError('axis_time')
+            else:
+                self.axis_time = axis_time
+                self.is_timed = True
+                self.forward = self._forward_with_time_axis
         else:
             raise TypeError('axis_time')
 
@@ -90,7 +95,6 @@ class _Recurrent(CPModelMethods):
                 outputs[tup_indexes_outputs_t] = hx
 
             return outputs
-
 
     def _forward_without_time_axis(self, input, hx=None):
 
