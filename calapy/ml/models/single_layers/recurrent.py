@@ -10,12 +10,12 @@ __all__ = ['RNN', 'LSTM', 'GRU']
 
 class _Recurrent(CPModelMethods):
 
-    def __init__(self, axis_time, hx_sigma=0.1):
+    def __init__(self, type_name, axis_time, h_sigma=0.1):
 
         """
 
         :type axis_time: int | None
-        :type hx_sigma: float | int | None
+        :type h_sigma: float | int | None
 
         """
 
@@ -28,6 +28,23 @@ class _Recurrent(CPModelMethods):
             CPModelMethods.__init__(self=self, device=None)
             if CPModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(CPModelMethods)
+
+        self.accepted_type_names_with_h = tuple(['rnn', 'gru'])
+        self.accepted_type_names_with_hc = tuple(['lstm'])
+        self.accepted_type_names = self.accepted_type_names_with_h + self.accepted_type_names_with_hc
+        if isinstance(type_name, str):
+            type_name_f = type_name.lower()
+
+            if type_name_f in self.accepted_type_names_with_h:
+                self.type_name = type_name_f
+                self.hc_id = 0
+            elif type_name_f in self.accepted_type_names_with_hc:
+                self.type_name = type_name_f
+                self.hc_id = 1
+            else:
+                raise ValueError('type_name')
+        else:
+            raise TypeError('type_name')
 
         self.min_input_n_dims = 1
         self._torch_max_input_n_dims = 2
@@ -49,31 +66,31 @@ class _Recurrent(CPModelMethods):
         else:
             raise TypeError('axis_time')
 
-        if hx_sigma is None:
-            self.hx_sigma = 0.0
-        elif isinstance(hx_sigma, (int, float)):
-            self.hx_sigma = hx_sigma
+        if h_sigma is None:
+            self.h_sigma = 0.0
+        elif isinstance(h_sigma, (int, float)):
+            self.h_sigma = h_sigma
         else:
-            raise TypeError('hx_sigma')
+            raise TypeError('h_sigma')
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def _forward_with_time_axis(self, input, hx=None):
+    def _forward_with_time_axis(self, input, h=None):
 
         """
 
         :type input: torch.Tensor
-        :type hx: torch.Tensor
+        :type h: torch.Tensor
         :rtype: torch.Tensor
         """
 
         if input.ndim < self.min_input_n_dims_plus_1:
             raise ValueError('input.ndim')
         else:
-            if hx is None:
+            if h is None:
                 batch_shape = [input.shape[a] for a in range(0, input.ndim - 1, 1) if a != self.axis_time]
-                hx = self.init_hx(batch_shape=batch_shape)
+                h = self.init_h(batch_shape=batch_shape)
 
             T = time_size = input.shape[self.axis_time]
 
@@ -89,30 +106,29 @@ class _Recurrent(CPModelMethods):
 
                 indexes_outputs_t[self.axis_time] = t
                 tup_indexes_outputs_t = tuple(indexes_outputs_t)
-
-                hx = self._forward_without_time_axis(input=input[tup_indexes_input_t], hx=hx)
-
-                outputs[tup_indexes_outputs_t] = hx
+                h = self._forward_without_time_axis(input=input[tup_indexes_input_t], h=h)
+                outputs[tup_indexes_outputs_t] = h
 
             return outputs
 
-    def _forward_without_time_axis(self, input, hx=None):
+    def _forward_without_time_axis(self, input, h=None):
 
         """
 
         :type input: torch.Tensor
-        :type hx: torch.Tensor
+        :type h: torch.Tensor
         :rtype: torch.Tensor
         """
 
         if input.ndim < self.min_input_n_dims:
             raise ValueError('input.ndim')
         else:
-            if hx is None:
+            if h is None:
                 batch_shape = [a for a in range(0, input.ndim - 1, 1)]
-                hx = self.init_hx(batch_shape=batch_shape)
+                h = self.init_h(batch_shape=batch_shape)
+
             if self.min_input_n_dims <= input.ndim <= self._torch_max_input_n_dims:
-                return self.layer(input=input, hx=hx)
+                return self.layer(input=input, hx=h)
             else:
                 extra_batch_dims = input.ndim - self._torch_max_input_n_dims
                 extra_batch_shape = input.shape[slice(0, extra_batch_dims, 1)]
@@ -120,11 +136,11 @@ class _Recurrent(CPModelMethods):
                 for indexes_i in cp_combinations.n_conditions_to_combinations_on_the_fly(
                         n_conditions=extra_batch_shape, dtype='i'):
                     tup_indexes_i = tuple(indexes_i.tolist())
-                    hx[tup_indexes_i] = self.layer(input=input[tup_indexes_i], hx=hx[tup_indexes_i])
+                    h[tup_indexes_i] = self.layer(input=input[tup_indexes_i], hx=h[tup_indexes_i])
 
-                return hx
+                return h
 
-    def init_hx(self, batch_shape, generator=None):
+    def init_h(self, batch_shape, generator=None):
         """
 
         :type batch_shape: int | list | tuple
@@ -133,33 +149,67 @@ class _Recurrent(CPModelMethods):
         """
 
         if isinstance(batch_shape, int):
-            hx_shape = [batch_shape, self.layer.hidden_size]
-        elif isinstance(batch_shape, (list, tuple)):
-            hx_shape = batch_shape + [self.layer.hidden_size]
+            h_shape = [batch_shape, self.layer.hidden_size]
+        elif isinstance(batch_shape, (list, tuple, torch.Size)):
+            h_shape = batch_shape + [self.layer.hidden_size]
         elif isinstance(batch_shape, (torch.Tensor, np.ndarray)):
-            hx_shape = batch_shape.tolist() + [self.layer.hidden_size]
+            h_shape = batch_shape.tolist() + [self.layer.hidden_size]
         else:
             raise TypeError('batch_shape')
 
         if self.training:
 
-            if self.hx_sigma == 0:
-                hx = torch.zeros(size=hx_shape, dtype=self.dtype, device=self.device, requires_grad=False)
+            if self.h_sigma == 0:
+                h = torch.zeros(size=h_shape, dtype=self.dtype, device=self.device, requires_grad=False)
             else:
-                hx = torch.randn(
-                    size=hx_shape, generator=generator, dtype=self.dtype, device=self.device, requires_grad=False)
-                if self.hx_sigma != 1.0:
-                    hx *= self.hx_sigma
+                h = torch.randn(
+                    size=h_shape, generator=generator, dtype=self.dtype, device=self.device, requires_grad=False)
+                if self.h_sigma != 1.0:
+                    h *= self.h_sigma
         else:
-            hx = torch.zeros(size=hx_shape, dtype=self.dtype, device=self.device, requires_grad=False)
+            h = torch.zeros(size=h_shape, dtype=self.dtype, device=self.device, requires_grad=False)
+        return h
 
-        return hx
+    def init_hc(self, batch_shape, generators=None):
+        """
+
+        :type batch_shape: int | list | tuple
+        :type generators:
+            list[torch.Generator | None, torch.Generator | None] | tuple[torch.Generator | None, torch.Generator | None]
+            | torch.Generator | None
+        :rtype: tuple[torch.Tensor, torch.Tensor]
+        """
+
+        if generators is None:
+            generators = [None, None]
+        elif isinstance(generators, torch.Generator):
+            generators = [generators, generators]
+        elif isinstance(generators, (list, tuple)):
+            len_gens = len(generators)
+            if len_gens == 0:
+                generators = [None, None]
+            elif len_gens == 1:
+                generators = [generators[0], generators[0]]
+            elif len_gens == 2:
+                for g in range(0, 2, 1):
+                    if generators[g] is not None and not isinstance(generators[g], torch.Generator):
+                        raise TypeError(f'generators[{g:d}]')
+            else:
+                raise ValueError('len(generators)')
+        else:
+            raise TypeError('generators')
+
+        h = (
+            self.init_h(batch_shape=batch_shape, generator=generators[0]),
+            self.init_h(batch_shape=batch_shape, generator=generators[1]))
+
+        return h
 
 
 class RNN(_Recurrent, torch.nn.RNNCell):
 
     def __init__(
-            self, input_size, hidden_size, bias=True, nonlinearity='tanh', axis_time=0, hx_sigma=0.1,
+            self, input_size, hidden_size, bias=True, nonlinearity='tanh', axis_time=0, h_sigma=0.1,
             device=None, dtype=None):
 
         superclass = RNN
@@ -168,7 +218,7 @@ class RNN(_Recurrent, torch.nn.RNNCell):
             self.superclasses_initiated = []
 
         if _Recurrent not in self.superclasses_initiated:
-            _Recurrent.__init__(self=self, axis_time=axis_time, hx_sigma=hx_sigma)
+            _Recurrent.__init__(self=self, type_name='rnn', axis_time=axis_time, h_sigma=h_sigma)
             if _Recurrent not in self.superclasses_initiated:
                 self.superclasses_initiated.append(_Recurrent)
 
@@ -176,6 +226,31 @@ class RNN(_Recurrent, torch.nn.RNNCell):
         self.layer = torch.nn.RNNCell(
             input_size=input_size, hidden_size=hidden_size, bias=bias, nonlinearity=nonlinearity,
             device=device, dtype=dtype)
+
+        self.get_device()
+        self.get_dtype()
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
+
+
+class GRU(_Recurrent, torch.nn.GRUCell):
+
+    def __init__(self, input_size, hidden_size, bias=True, axis_time=0, h_sigma=0.1, device=None, dtype=None):
+
+        superclass = GRU
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
+
+        if _Recurrent not in self.superclasses_initiated:
+            _Recurrent.__init__(self=self, type_name='gru', axis_time=axis_time, h_sigma=h_sigma)
+            if _Recurrent not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_Recurrent)
+
+        # define attributes here
+        self.layer = torch.nn.GRUCell(
+            input_size=input_size, hidden_size=hidden_size, bias=bias, device=device, dtype=dtype)
 
         self.get_device()
         self.get_dtype()
