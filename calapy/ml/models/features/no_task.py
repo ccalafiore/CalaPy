@@ -22,7 +22,7 @@ class SequentialFCLs(cp_ModelMethods):
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
-            cp_ModelMethods.__init__(self=self, device=device)
+            cp_ModelMethods.__init__(self=self)
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
@@ -94,7 +94,7 @@ class ParallelSequentialFCLs(cp_ModelMethods):
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
-            cp_ModelMethods.__init__(self=self, device=device)
+            cp_ModelMethods.__init__(self=self)
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
@@ -214,7 +214,7 @@ class LSTM(cp_ModelMethods):
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
-            cp_ModelMethods.__init__(self=self, device=device)
+            cp_ModelMethods.__init__(self=self)
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
@@ -331,7 +331,7 @@ class LSTMSequentialParallelFCLs(cp_ModelMethods):
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
-            cp_ModelMethods.__init__(self=self, device=device)
+            cp_ModelMethods.__init__(self=self)
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
@@ -394,7 +394,7 @@ class SequentialParallelFCLs(cp_ModelMethods):
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
-            cp_ModelMethods.__init__(self=self, device=device)
+            cp_ModelMethods.__init__(self=self)
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 

@@ -19,7 +19,7 @@ class _ConvNd(CPModelMethods):
             self.superclasses_initiated = []
 
         if CPModelMethods not in self.superclasses_initiated:
-            CPModelMethods.__init__(self=self, device=None)
+            CPModelMethods.__init__(self=self)
             if CPModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(CPModelMethods)
 

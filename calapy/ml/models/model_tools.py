@@ -10,7 +10,7 @@ __all__ = ['ModelMethods']
 
 class ModelMethods(torch.nn.Module):
 
-    def __init__(self, device: typing.Union[torch.device, str, None] = None):
+    def __init__(self):
 
         superclass = ModelMethods
         subclass = type(self)
@@ -22,7 +22,8 @@ class ModelMethods(torch.nn.Module):
             if torch.nn.Module not in self.superclasses_initiated:
                 self.superclasses_initiated.append(torch.nn.Module)
 
-        self.device = self.init_device(device=device)
+        self.dtype = None
+        self.device = None
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)

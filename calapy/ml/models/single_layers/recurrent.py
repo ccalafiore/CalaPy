@@ -25,7 +25,7 @@ class _Recurrent(CPModelMethods):
             self.superclasses_initiated = []
 
         if CPModelMethods not in self.superclasses_initiated:
-            CPModelMethods.__init__(self=self, device=None)
+            CPModelMethods.__init__(self=self)
             if CPModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(CPModelMethods)
 
@@ -48,19 +48,7 @@ class _Recurrent(CPModelMethods):
         else:
             raise TypeError('type_name')
 
-        if axis_time is None:
-            self.axis_time = axis_time
-            self.is_timed = False
-            self.forward = self._forward_without_time_axis
-        elif isinstance(axis_time, int):
-            if axis_time < 0:
-                raise ValueError('axis_time')
-            else:
-                self.axis_time = axis_time
-                self.is_timed = True
-                self.forward = self._forward_with_time_axis
-        else:
-            raise TypeError('axis_time')
+        self.axis_time, self.is_timed, self.forward = self.set_axis_time(axis_time=axis_time)
 
         if h_sigma is None:
             self.h_sigma = 0.0
@@ -78,7 +66,7 @@ class _Recurrent(CPModelMethods):
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def _forward_with_time_axis(self, input, h=None):
+    def _forward_with_axis_time(self, input, h=None):
 
         """
 
@@ -90,13 +78,20 @@ class _Recurrent(CPModelMethods):
         if input.ndim < self.min_input_n_dims_plus_1:
             raise ValueError('input.ndim')
         else:
-            if h is None:
-                batch_shape = [input.shape[a] for a in range(0, input.ndim - 1, 1) if a != self.axis_time]
-                h = self.init_h(batch_shape=batch_shape)
-
             T = time_size = input.shape[self.axis_time]
 
-            outputs_shape = [input.shape[a] for a in range(0, input.ndim - 1, 1)] + [self.layer.hidden_size]
+            axis_features_input = input.ndim - 1
+            if axis_features_input == self.axis_time:
+                axis_features_input = self.axis_time - 1
+
+            if h is None:
+                batch_shape = [
+                    input.shape[a] for a in range(0, input.ndim, 1) if a not in [self.axis_time, axis_features_input]]
+                h = self.init_h(batch_shape=batch_shape)
+
+            # outputs_shape = [input.shape[a] for a in range(0, input.ndim, 1)]
+            outputs_shape = list(input.shape)
+            outputs_shape[axis_features_input] = self.layer.hidden_size
             outputs = torch.empty(size=outputs_shape, dtype=self.dtype, device=self.device, requires_grad=False)
 
             indexes_input_t = [slice(0, input.shape[a], 1) for a in range(0, input.ndim, 1)]  # type: list
@@ -108,7 +103,7 @@ class _Recurrent(CPModelMethods):
 
                 indexes_outputs_t[self.axis_time] = t
                 tup_indexes_outputs_t = tuple(indexes_outputs_t)
-                h = self._forward_without_time_axis(input=input[tup_indexes_input_t], h=h)
+                h = self._forward_without_axis_time(input=input[tup_indexes_input_t], h=h)
 
                 if self.is_with_hc:
                     outputs[tup_indexes_outputs_t] = h[0]
@@ -117,7 +112,7 @@ class _Recurrent(CPModelMethods):
 
             return outputs, h
 
-    def _forward_without_time_axis(self, input, h=None):
+    def _forward_without_axis_time(self, input, h=None):
 
         """
 
@@ -130,31 +125,40 @@ class _Recurrent(CPModelMethods):
             raise ValueError('input.ndim')
         else:
             if h is None:
-                batch_shape = [a for a in range(0, input.ndim - 1, 1)]
+                axis_features_input = input.ndim - 1
+                batch_shape = [
+                    input.shape[a] for a in range(0, input.ndim, 1) if a != axis_features_input]
                 h = self.init_h(batch_shape=batch_shape)
 
             if self.min_input_n_dims <= input.ndim <= self._torch_max_input_n_dims:
                 return self.layer(input=input, hx=h)
             else:
-                extra_batch_dims = input.ndim - self._torch_max_input_n_dims
-                extra_batch_shape = input.shape[slice(0, extra_batch_dims, 1)]
+                n_extra_batch_dims = input.ndim - self._torch_max_input_n_dims
+                extra_batch_shape = input.shape[slice(0, n_extra_batch_dims, 1)]
+
+                indexes_input_i = np.asarray([slice(0, input.shape[a], 1) for a in range(0, input.ndim, 1)], dtype='O')
+                indexes_h_i = np.asarray([slice(0, h.shape[a], 1) for a in range(0, h.ndim, 1)], dtype='O')
 
                 for indexes_i in cp_combinations.n_conditions_to_combinations_on_the_fly(
                         n_conditions=extra_batch_shape, dtype='i'):
 
-                    tup_indexes_i = tuple(indexes_i.tolist())
+                    indexes_input_i[slice(0, n_extra_batch_dims, 1)] = indexes_i
+                    tup_indexes_input_i = tuple(indexes_input_i.tolist())
+
+                    indexes_h_i[slice(0, n_extra_batch_dims, 1)] = indexes_i
+                    tup_indexes_h_i = tuple(indexes_h_i.tolist())
 
                     if self.is_with_hc:
-                        # h_i = h[0][tup_indexes_i], h[1][tup_indexes_i]
-                        # h_i = self.layer(input=input[tup_indexes_i], hx=h_i)
-                        # h[0][tup_indexes_i], h[1][tup_indexes_i] = h_i
-                        h[0][tup_indexes_i], h[1][tup_indexes_i] = self.layer(
-                            input=input[tup_indexes_i], hx=(h[0][tup_indexes_i], h[1][tup_indexes_i]))
+                        # h_i = h[0][tup_indexes_h_i], h[1][tup_indexes_h_i]
+                        # h_i = self.layer(input=input[tup_indexes_input_i], hx=h_i)
+                        # h[0][tup_indexes_h_i], h[1][tup_indexes_h_i] = h_i
+                        h[0][tup_indexes_h_i], h[1][tup_indexes_h_i] = self.layer(
+                            input=input[tup_indexes_input_i], hx=(h[0][tup_indexes_h_i], h[1][tup_indexes_h_i]))
                     else:
-                        # h_i = h[tup_indexes_i]
-                        # h_i = self.layer(input=input[tup_indexes_i], hx=h_i)
-                        # h[tup_indexes_i] = h_i
-                        h[tup_indexes_i] = self.layer(input=input[tup_indexes_i], hx=h[tup_indexes_i])
+                        # h_i = h[tup_indexes_h_i]
+                        # h_i = self.layer(input=input[tup_indexes_input_i], hx=h_i)
+                        # h[tup_indexes_h_i] = h_i
+                        h[tup_indexes_h_i] = self.layer(input=input[tup_indexes_input_i], hx=h[tup_indexes_h_i])
 
                 return h
 
@@ -168,8 +172,10 @@ class _Recurrent(CPModelMethods):
 
         if isinstance(batch_shape, int):
             h_shape = [batch_shape, self.layer.hidden_size]
-        elif isinstance(batch_shape, (list, tuple, torch.Size)):
+        elif isinstance(batch_shape, list):
             h_shape = batch_shape + [self.layer.hidden_size]
+        elif isinstance(batch_shape, (tuple, torch.Size)):
+            h_shape = list(batch_shape) + [self.layer.hidden_size]
         elif isinstance(batch_shape, (torch.Tensor, np.ndarray)):
             h_shape = batch_shape.tolist() + [self.layer.hidden_size]
         else:
@@ -222,6 +228,29 @@ class _Recurrent(CPModelMethods):
             self._init_h(batch_shape=batch_shape, generator=generators[1]))
 
         return h
+
+    def set_axis_time(self, axis_time):
+
+        """
+
+        :type axis_time: int | None
+        """
+
+        if axis_time is None:
+            self.axis_time = axis_time
+            self.is_timed = False
+            self.forward = self._forward_without_axis_time
+        elif isinstance(axis_time, int):
+            if axis_time < 0:
+                raise ValueError('axis_time')
+            else:
+                self.axis_time = axis_time
+                self.is_timed = True
+                self.forward = self._forward_with_axis_time
+        else:
+            raise TypeError('axis_time')
+
+        return self.axis_time, self.is_timed, self.forward
 
 
 class RNN(_Recurrent, torch.nn.RNNCell):
