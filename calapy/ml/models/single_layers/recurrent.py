@@ -34,23 +34,19 @@ class _Recurrent(CPModelMethods):
         self.accepted_type_names = self.accepted_type_names_with_h + self.accepted_type_names_with_hc
         if isinstance(type_name, str):
             type_name_f = type_name.lower()
-
             if type_name_f in self.accepted_type_names_with_h:
                 self.type_name = type_name_f
-                self.hc_id = 0
+                self.is_with_hc = False
+                self.init_h = self._init_h
+                # del self._init_hc
             elif type_name_f in self.accepted_type_names_with_hc:
                 self.type_name = type_name_f
-                self.hc_id = 1
+                self.is_with_hc = True
+                self.init_h = self._init_hc
             else:
                 raise ValueError('type_name')
         else:
             raise TypeError('type_name')
-
-        self.min_input_n_dims = 1
-        self._torch_max_input_n_dims = 2
-
-        self.min_input_n_dims_plus_1 = self.min_input_n_dims + 1
-        self._torch_max_input_n_dims_plus_1 = self._torch_max_input_n_dims + 1
 
         if axis_time is None:
             self.axis_time = axis_time
@@ -72,6 +68,12 @@ class _Recurrent(CPModelMethods):
             self.h_sigma = h_sigma
         else:
             raise TypeError('h_sigma')
+
+        self.min_input_n_dims = 1
+        self._torch_max_input_n_dims = 2
+
+        self.min_input_n_dims_plus_1 = self.min_input_n_dims + 1
+        self._torch_max_input_n_dims_plus_1 = self._torch_max_input_n_dims + 1
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
@@ -107,9 +109,13 @@ class _Recurrent(CPModelMethods):
                 indexes_outputs_t[self.axis_time] = t
                 tup_indexes_outputs_t = tuple(indexes_outputs_t)
                 h = self._forward_without_time_axis(input=input[tup_indexes_input_t], h=h)
-                outputs[tup_indexes_outputs_t] = h
 
-            return outputs
+                if self.is_with_hc:
+                    outputs[tup_indexes_outputs_t] = h[0]
+                else:
+                    outputs[tup_indexes_outputs_t] = h
+
+            return outputs, h
 
     def _forward_without_time_axis(self, input, h=None):
 
@@ -135,12 +141,24 @@ class _Recurrent(CPModelMethods):
 
                 for indexes_i in cp_combinations.n_conditions_to_combinations_on_the_fly(
                         n_conditions=extra_batch_shape, dtype='i'):
+
                     tup_indexes_i = tuple(indexes_i.tolist())
-                    h[tup_indexes_i] = self.layer(input=input[tup_indexes_i], hx=h[tup_indexes_i])
+
+                    if self.is_with_hc:
+                        # h_i = h[0][tup_indexes_i], h[1][tup_indexes_i]
+                        # h_i = self.layer(input=input[tup_indexes_i], hx=h_i)
+                        # h[0][tup_indexes_i], h[1][tup_indexes_i] = h_i
+                        h[0][tup_indexes_i], h[1][tup_indexes_i] = self.layer(
+                            input=input[tup_indexes_i], hx=(h[0][tup_indexes_i], h[1][tup_indexes_i]))
+                    else:
+                        # h_i = h[tup_indexes_i]
+                        # h_i = self.layer(input=input[tup_indexes_i], hx=h_i)
+                        # h[tup_indexes_i] = h_i
+                        h[tup_indexes_i] = self.layer(input=input[tup_indexes_i], hx=h[tup_indexes_i])
 
                 return h
 
-    def init_h(self, batch_shape, generator=None):
+    def _init_h(self, batch_shape, generator=None):
         """
 
         :type batch_shape: int | list | tuple
@@ -170,7 +188,7 @@ class _Recurrent(CPModelMethods):
             h = torch.zeros(size=h_shape, dtype=self.dtype, device=self.device, requires_grad=False)
         return h
 
-    def init_hc(self, batch_shape, generators=None):
+    def _init_hc(self, batch_shape, generators=None):
         """
 
         :type batch_shape: int | list | tuple
@@ -200,8 +218,8 @@ class _Recurrent(CPModelMethods):
             raise TypeError('generators')
 
         h = (
-            self.init_h(batch_shape=batch_shape, generator=generators[0]),
-            self.init_h(batch_shape=batch_shape, generator=generators[1]))
+            self._init_h(batch_shape=batch_shape, generator=generators[0]),
+            self._init_h(batch_shape=batch_shape, generator=generators[1]))
 
         return h
 
@@ -250,6 +268,31 @@ class GRU(_Recurrent, torch.nn.GRUCell):
 
         # define attributes here
         self.layer = torch.nn.GRUCell(
+            input_size=input_size, hidden_size=hidden_size, bias=bias, device=device, dtype=dtype)
+
+        self.get_device()
+        self.get_dtype()
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
+
+
+class LSTM(_Recurrent, torch.nn.LSTMCell):
+
+    def __init__(self, input_size, hidden_size, bias=True, axis_time=0, h_sigma=0.1, device=None, dtype=None):
+
+        superclass = LSTM
+        subclass = type(self)
+        if superclass == subclass:
+            self.superclasses_initiated = []
+
+        if _Recurrent not in self.superclasses_initiated:
+            _Recurrent.__init__(self=self, type_name='lstm', axis_time=axis_time, h_sigma=h_sigma)
+            if _Recurrent not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_Recurrent)
+
+        # define attributes here
+        self.layer = torch.nn.LSTMCell(
             input_size=input_size, hidden_size=hidden_size, bias=bias, device=device, dtype=dtype)
 
         self.get_device()
