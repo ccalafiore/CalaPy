@@ -3,8 +3,7 @@
 import torch
 import torchvision
 
-
-__all__ = ['torch', 'torchvision', 'datasets', 'models', 'output_methods', 'devices', 'preprocess', 'test', 'train']
+__all__ = ['datasets', 'models', 'output_methods', 'devices', 'preprocess', 'test', 'train']
 
 
 def initiate(names_submodules=None):
@@ -31,3 +30,4 @@ def initiate(names_submodules=None):
         raise TypeError(names_submodules)
 
 
+initiate(names_submodules=__all__)

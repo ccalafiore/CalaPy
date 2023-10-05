@@ -27,3 +27,4 @@ def initiate(names_submodules=None):
         raise TypeError(names_submodules)
 
 
+initiate(names_submodules=__all__)
