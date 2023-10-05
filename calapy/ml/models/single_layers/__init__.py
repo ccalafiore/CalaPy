@@ -1,6 +1,7 @@
 
 
 from .conv import *
-from .non_trainable import NoiseLayer
+from .non_trainable import *
+from .recurrent import *
 
-__all__ = ['Conv1d', 'Conv2d', 'Conv3d', 'NoiseLayer']
+__all__ = ['Conv1d', 'Conv2d', 'Conv3d', 'NoiseLayer', 'RNN', 'LSTM', 'GRU']
