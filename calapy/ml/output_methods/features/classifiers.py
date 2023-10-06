@@ -17,8 +17,12 @@ class ClassifierMethods(OutputMethods):
                     typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor]) = None) -> None:
 
         superclass = ClassifierMethods
-        subclass = type(self)
-        if subclass == superclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if isinstance(C, int):
@@ -165,8 +169,12 @@ class TimedClassifierMethods(TimedOutputMethods, ClassifierMethods):
             loss_weights_classifiers: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = TimedClassifierMethods
-        subclass = type(self)
-        if subclass == superclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if ClassifierMethods not in self.superclasses_initiated:

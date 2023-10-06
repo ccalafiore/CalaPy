@@ -20,8 +20,12 @@ class _Recurrent(CPModelMethods):
         """
 
         superclass = _Recurrent
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if CPModelMethods not in self.superclasses_initiated:
@@ -137,7 +141,14 @@ class _Recurrent(CPModelMethods):
                 extra_batch_shape = input.shape[slice(0, n_extra_batch_dims, 1)]
 
                 indexes_input_i = np.asarray([slice(0, input.shape[a], 1) for a in range(0, input.ndim, 1)], dtype='O')
-                indexes_h_i = np.asarray([slice(0, h.shape[a], 1) for a in range(0, h.ndim, 1)], dtype='O')
+
+                if self.is_with_hc:
+                    h_shape = h[0].shape
+                    h_ndim = h[0].ndim
+                else:
+                    h_shape = h.shape
+                    h_ndim = h.ndim
+                indexes_h_i = np.asarray([slice(0, h_shape[a], 1) for a in range(0, h_ndim, 1)], dtype='O')
 
                 for indexes_i in cp_combinations.n_conditions_to_combinations_on_the_fly(
                         n_conditions=extra_batch_shape, dtype='i'):
@@ -260,8 +271,12 @@ class RNN(_Recurrent, torch.nn.RNNCell):
             device=None, dtype=None):
 
         superclass = RNN
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if _Recurrent not in self.superclasses_initiated:
@@ -286,8 +301,12 @@ class GRU(_Recurrent, torch.nn.GRUCell):
     def __init__(self, input_size, hidden_size, bias=True, axis_time=0, h_sigma=0.1, device=None, dtype=None):
 
         superclass = GRU
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if _Recurrent not in self.superclasses_initiated:
@@ -311,8 +330,12 @@ class LSTM(_Recurrent, torch.nn.LSTMCell):
     def __init__(self, input_size, hidden_size, bias=True, axis_time=0, h_sigma=0.1, device=None, dtype=None):
 
         superclass = LSTM
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if _Recurrent not in self.superclasses_initiated:

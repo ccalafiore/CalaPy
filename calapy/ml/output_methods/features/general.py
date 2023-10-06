@@ -52,8 +52,12 @@ class OutputMethods:
             loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = OutputMethods
-        subclass = type(self)
-        if subclass == superclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         # if cp_ModelMethods not in self.superclasses_initiated:
@@ -220,8 +224,12 @@ class TimedOutputMethods(OutputMethods):
             loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = TimedOutputMethods
-        subclass = type(self)
-        if subclass == superclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         self.n_axes_outs = 3

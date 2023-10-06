@@ -6,7 +6,7 @@ import numpy as np
 import typing
 
 __all__ = [
-    'SequentialFCLs', 'ParallelSequentialFCLs', 'LSTM', 'LSTMSequentialParallelFCLs', 'SequentialParallelFCLs']
+    'SequentialFCLs', 'ParallelSequentialFCLs', 'LSTMSequentialParallelFCLs', 'SequentialParallelFCLs']
 
 
 class SequentialFCLs(cp_ModelMethods):
@@ -17,8 +17,12 @@ class SequentialFCLs(cp_ModelMethods):
             device: typing.Union[torch.device, str, None] = None) -> None:
 
         superclass = SequentialFCLs
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
@@ -70,6 +74,7 @@ class SequentialFCLs(cp_ModelMethods):
             bias=self.biases_layers[l - 1], device=self.device) for l in range(1, self.L, 1)])
 
         self.set_device()
+        self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
@@ -89,8 +94,12 @@ class ParallelSequentialFCLs(cp_ModelMethods):
             device: typing.Union[torch.device, str, None] = None) -> None:
 
         superclass = ParallelSequentialFCLs
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
@@ -179,6 +188,7 @@ class ParallelSequentialFCLs(cp_ModelMethods):
                 for l in range(1, self.L[m], 1)]) for m in range(0, self.M, 1)])
 
         self.set_device()
+        self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
@@ -199,119 +209,6 @@ class ParallelSequentialFCLs(cp_ModelMethods):
         return outs
 
 
-class LSTM(cp_ModelMethods):
-    # todo sequential LSTMs
-
-    def __init__(
-            self, n_features_inputs: int, n_features_outs: int, bias: typing.Union[bool, int] = True,
-            n_layers: int = 1, dropout: typing.Union[int, float] = 0, bidirectional: bool = False,
-            batch_first: bool = False, return_hc: bool = True,
-            device: typing.Union[torch.device, str, None] = None) -> None:
-
-        superclass = LSTM
-        subclass = type(self)
-        if superclass == subclass:
-            self.superclasses_initiated = []
-
-        if cp_ModelMethods not in self.superclasses_initiated:
-            cp_ModelMethods.__init__(self=self)
-            if cp_ModelMethods not in self.superclasses_initiated:
-                self.superclasses_initiated.append(cp_ModelMethods)
-
-        self.n_features_inputs = n_features_inputs
-        self.n_features_outs = n_features_outs
-
-        self.n_layers = n_layers
-
-        if isinstance(bias, bool):
-            self.bias = bias
-        elif isinstance(bias, int):
-            self.bias = bool(bias)
-        else:
-            raise TypeError('bias = ' + str(bias))
-
-        self.batch_first = batch_first
-
-        self.dropout = dropout
-
-        self.bidirectional = bidirectional
-
-        # lstm tutorials at:
-        # https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
-        # https://pytorch.org/tutorials/beginner/nlp/sequence_models_tutorial.html
-
-        self.lstm = torch.nn.LSTM(
-            self.n_features_inputs, self.n_features_outs,
-            num_layers=self.n_layers, bias=self.bias,
-            batch_first=self.batch_first, dropout=self.dropout,
-            bidirectional=self.bidirectional, device=self.device)
-
-        self.return_hc = return_hc
-
-        if self.bidirectional:
-            self.n_outs = self.num_directions = 2
-        else:
-            self.n_outs = self.num_directions = 1
-
-        self.n_features_all_outs = self.n_features_outs * self.n_outs
-
-        if self.batch_first:
-            self.axis_batch_inputs = 0
-            self.axis_time_inputs = 1
-        else:
-            self.axis_batch_inputs = 1
-            self.axis_time_inputs = 0
-        self.axis_features_inputs = 2
-
-        self.set_device()
-
-        if superclass not in self.superclasses_initiated:
-            self.superclasses_initiated.append(superclass)
-
-    def forward(self, x: torch.Tensor, hc: typing.Union[tuple, list, None] = None):
-
-        if hc is None:
-            batch_size = x.shape[self.axis_batch_inputs]
-            hc = self.init_hc(batch_size)
-        elif (hc[0] is None) or (hc[1] is None):
-            batch_size = x.shape[self.axis_batch_inputs]
-            h, c = hc
-            if h is None:
-                h = self.init_h(batch_size)
-            if c is None:
-                c = self.init_c(batch_size)
-            hc = h, c
-
-        x, hc = self.lstm(x, hc)
-
-        if self.return_hc:
-            return x, hc
-        else:
-            return x
-
-    def init_h(self, batch_size):
-
-        h = torch.zeros(
-            [self.num_directions * self.n_layers, batch_size, self.n_features_outs],
-            dtype=torch.float32, device=self.device, requires_grad=False)
-
-        return h
-
-    def init_c(self, batch_size):
-
-        c = torch.zeros(
-            [self.num_directions * self.n_layers, batch_size, self.n_features_outs],
-            dtype=torch.float32, device=self.device, requires_grad=False)
-
-        return c
-
-    def init_hc(self, batch_size):
-
-        hc = self.init_h(batch_size), self.init_c(batch_size)
-
-        return hc
-
-
 class LSTMSequentialParallelFCLs(cp_ModelMethods):
 
     def __init__(
@@ -326,8 +223,12 @@ class LSTMSequentialParallelFCLs(cp_ModelMethods):
             device: typing.Union[torch.device, str, None] = None) -> None:
 
         superclass = LSTMSequentialParallelFCLs
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
@@ -362,6 +263,7 @@ class LSTMSequentialParallelFCLs(cp_ModelMethods):
         self.return_hc = self.lstm.return_hc
 
         self.set_device()
+        self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
@@ -389,8 +291,12 @@ class SequentialParallelFCLs(cp_ModelMethods):
             device: typing.Union[torch.device, str, None] = None) -> None:
 
         superclass = SequentialParallelFCLs
-        name_subclass = type(self)
-        if superclass == name_subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if cp_ModelMethods not in self.superclasses_initiated:
@@ -413,6 +319,7 @@ class SequentialParallelFCLs(cp_ModelMethods):
         self.M = self.parallel_fc_layers.M
 
         self.set_device()
+        self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)

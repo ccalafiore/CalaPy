@@ -22,8 +22,12 @@ class DQCMethods(DQNMethods, TimedClassifierMethods):
             loss_weights: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None) -> None:
 
         superclass = DQCMethods
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         self.possible_tasks = ['A', 'C']

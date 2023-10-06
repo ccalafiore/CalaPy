@@ -13,8 +13,12 @@ class ModelMethods(torch.nn.Module):
     def __init__(self):
 
         superclass = ModelMethods
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if torch.nn.Module not in self.superclasses_initiated:

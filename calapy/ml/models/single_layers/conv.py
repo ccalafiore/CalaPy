@@ -1,6 +1,5 @@
 
 
-import os.path
 import torch
 from .... import combinations as cp_combinations
 from ..model_tools import ModelMethods as CPModelMethods
@@ -14,8 +13,12 @@ class _ConvNd(CPModelMethods):
     def __init__(self, nd):
 
         superclass = _ConvNd
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if CPModelMethods not in self.superclasses_initiated:
@@ -94,8 +97,12 @@ class Conv1d(_ConvNd, torch.nn.Conv1d):
             padding_mode='zeros', device=None, dtype=None):
 
         superclass = Conv1d
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if torch.nn.Conv1d not in self.superclasses_initiated:
@@ -124,8 +131,12 @@ class Conv2d(_ConvNd, torch.nn.Conv2d):
             padding_mode='zeros', device=None, dtype=None):
 
         superclass = Conv2d
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if torch.nn.Conv2d not in self.superclasses_initiated:
@@ -154,8 +165,12 @@ class Conv3d(_ConvNd, torch.nn.Conv3d):
             padding_mode='zeros', device=None, dtype=None):
 
         superclass = Conv3d
-        name_subclass = type(self)
-        if superclass == name_subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if torch.nn.Conv3d not in self.superclasses_initiated:

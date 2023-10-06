@@ -34,8 +34,12 @@ class DQC(no_task.LSTMSequentialParallelFCLs, DQCs.DQCMethods):
             device: typing.Union[torch.device, str, None] = None):
 
         superclass = DQC
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if no_task.LSTMSequentialParallelFCLs not in self.superclasses_initiated:
@@ -92,6 +96,7 @@ class DQC(no_task.LSTMSequentialParallelFCLs, DQCs.DQCMethods):
             raise ValueError('tasks, possible_actions, n_features_parallel_fc_layers')
 
         self.set_device()
+        self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)

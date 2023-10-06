@@ -18,8 +18,12 @@ class NoiseLayer(CPModelMethods):
         :type scale: float | int
         """
         superclass = NoiseLayer
-        subclass = type(self)
-        if superclass == subclass:
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
             self.superclasses_initiated = []
 
         if CPModelMethods not in self.superclasses_initiated:

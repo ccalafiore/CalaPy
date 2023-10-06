@@ -1,6 +1,6 @@
 
 
-__all__ = ['features', 'image', 'model_tools', 'single_layers']
+__all__ = ['features', 'image', 'model_tools', 'single_layers', 'multi_layers']
 
 
 def initiate(names_submodules=None):
