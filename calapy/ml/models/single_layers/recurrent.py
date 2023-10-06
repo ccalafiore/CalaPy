@@ -176,7 +176,7 @@ class _Recurrent(CPModelMethods):
     def _init_h(self, batch_shape, generator=None):
         """
 
-        :type batch_shape: int | list | tuple
+        :type batch_shape: int | list | tuple | torch.Size | torch.Tensor, np.ndarray
         :type generator: torch.Generator | None
         :rtype: torch.Tensor
         """
@@ -205,38 +205,38 @@ class _Recurrent(CPModelMethods):
             h = torch.zeros(size=h_shape, dtype=self.dtype, device=self.device, requires_grad=False)
         return h
 
-    def _init_hc(self, batch_shape, generators=None):
+    def _init_hc(self, batch_shape, generator=None):
         """
 
-        :type batch_shape: int | list | tuple
-        :type generators:
+        :type batch_shape: int | list | tuple | torch.Size | torch.Tensor, np.ndarray
+        :type generator:
             list[torch.Generator | None, torch.Generator | None] | tuple[torch.Generator | None, torch.Generator | None]
             | torch.Generator | None
         :rtype: tuple[torch.Tensor, torch.Tensor]
         """
 
-        if generators is None:
-            generators = [None, None]
-        elif isinstance(generators, torch.Generator):
-            generators = [generators, generators]
-        elif isinstance(generators, (list, tuple)):
-            len_gens = len(generators)
+        if generator is None:
+            generator = [None, None]
+        elif isinstance(generator, torch.Generator):
+            generator = [generator, generator]
+        elif isinstance(generator, (list, tuple)):
+            len_gens = len(generator)
             if len_gens == 0:
-                generators = [None, None]
+                generator = [None, None]
             elif len_gens == 1:
-                generators = [generators[0], generators[0]]
+                generator = [generator[0], generator[0]]
             elif len_gens == 2:
                 for g in range(0, 2, 1):
-                    if generators[g] is not None and not isinstance(generators[g], torch.Generator):
-                        raise TypeError(f'generators[{g:d}]')
+                    if generator[g] is not None and not isinstance(generator[g], torch.Generator):
+                        raise TypeError(f'generator[{g:d}]')
             else:
-                raise ValueError('len(generators)')
+                raise ValueError('len(generator)')
         else:
-            raise TypeError('generators')
+            raise TypeError('generator')
 
         h = (
-            self._init_h(batch_shape=batch_shape, generator=generators[0]),
-            self._init_h(batch_shape=batch_shape, generator=generators[1]))
+            self._init_h(batch_shape=batch_shape, generator=generator[0]),
+            self._init_h(batch_shape=batch_shape, generator=generator[1]))
 
         return h
 

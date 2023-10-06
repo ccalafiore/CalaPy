@@ -148,8 +148,6 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         else:
             self.forward = self._forward_without_recurrent_layers
 
-        self.z = 0
-
     def _forward_without_recurrent_layers(self, x):
 
         """
@@ -167,9 +165,7 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         """
 
         :type x: torch.Tensor | np.ndarray
-
         :type h: list[list[np.ndarray | torch.Tensor | None] | tuple[np.ndarray | torch.Tensor | None] | np.ndarray | torch.Tensor | None] | None
-
         :rtype: tuple[torch.Tensor, list[torch.Tensor | tuple[torch.Tensor, torch.Tensor]]]
 
 
@@ -178,18 +174,54 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         if h is None:
             h = [None for z in range(0, self.Z, 1)]  # type: list
 
-        self.z = 0
+        z = 0
 
         for l in range(0, self.L, 1):
 
             if self.params_of_layers[l]['type_name'] in ['rnn', 'lstm', 'gru']:
 
-                x, h[self.z] = self.layers[l](x, h[self.z])
+                x, h[z] = self.layers[l](x, h[z])
 
-                self.z += 1
+                z += 1
             else:
                 x = self.layers[l](x)
 
         return x, h
 
+    def init_h(self, batch_shape, generators=None):
 
+        """
+
+        :param batch_shape: The shape of the batch input data without the time and the feature dimensions.
+        :type batch_shape: int | list | tuple | torch.Size | torch.Tensor | np.ndarray
+        :param generators: The instances of the torch generator to generate the tensors h with random values from a
+            normal distribution.
+        :type generators: list | tuple | torch.Generator | None
+
+        :rtype: list[torch.Tensor | list[torch.Tensor]]
+
+        """
+
+        if generators is None:
+            generators = [None for z in range(0, self.Z, 1)]  # type: list
+        elif isinstance(generators, torch.Generator):
+            generators = [generators for z in range(0, self.Z, 1)]  # type: list
+        elif isinstance(generators, (list, tuple)):
+            len_gens = len(generators)
+            if len_gens != self.Z:
+                if len_gens == 0:
+                    generators = [None for z in range(0, self.Z, 1)]  # type: list
+                elif len_gens == 1:
+                    generators = [generators[0] for z in range(0, self.Z, 1)]  # type: list
+                else:
+                    raise ValueError('len(generators)')
+        else:
+            raise TypeError('generators')
+
+        h = [None for z in range(0, self.Z, 1)]  # type: list
+
+        for z in range(0, self.Z, 1):
+
+            h[z] = self.layers[self.recurrent_layer_indexes[z]].init_h(batch_shape=batch_shape, generator=generators[z])
+
+        return h
