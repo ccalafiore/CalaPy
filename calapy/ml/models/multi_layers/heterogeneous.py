@@ -225,3 +225,35 @@ class SequentialMultiHeteroLayers(CPModelMethods):
             h[z] = self.layers[self.recurrent_layer_indexes[z]].init_h(batch_shape=batch_shape, generator=generators[z])
 
         return h
+
+    def get_batch_shape(self, input_shape, batch_axes):
+
+        """
+
+        :param input_shape: The input shape.
+        :type input_shape: int | list | tuple | torch.Tensor | np.ndarray
+        :param batch_axes: The batch axes of the input.
+        :type input_shape: int | list | tuple | slice | torch.Tensor | np.ndarray
+        :return: The batch shape given the input shape "input_shape" and the batch axes "batch_axes".
+        :rtype: list[int]
+        """
+
+        if isinstance(input_shape, int):
+            input_shape_f = np.asarray(a=[input_shape], dtype='i')
+        elif isinstance(input_shape, (list, tuple)):
+            input_shape_f = np.asarray(a=input_shape, dtype='i')
+        elif isinstance(input_shape, (torch.Tensor, np.ndarray)):
+            input_shape_f = input_shape
+        else:
+            raise TypeError('input_shape')
+
+        if isinstance(batch_axes, int):
+            batch_axes_f = [batch_axes]
+        elif isinstance(batch_axes, (list, tuple, slice, torch.Tensor, np.ndarray)):
+            batch_axes_f = batch_axes
+        else:
+            raise TypeError('batch_axes')
+
+        batch_shape = input_shape_f[batch_axes_f].tolist()
+
+        return batch_shape
