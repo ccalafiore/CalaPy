@@ -3,16 +3,18 @@
 import os
 import copy
 import math
+import numpy as np
 import torch
 from .... import clock as cp_clock
 from .... import strings as cp_strings
 from .... import txt as cp_txt
 
 
-
-def proactive_feature_sequence_classifiers(
-        model, loader, delta_preprocessor, optimizer, I=10, E=None, T=None,
-        epsilon_start=.9, epsilon_end=.2, epsilon_step=-.1, directory_outputs=None):
+def train(
+        model, environment, optimizer, I=10, E=None, T=None,
+        n_samples_per_training_chunk=100000, n_samples_per_validation=100000,
+        epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05, n_samples_per_epsilon_step=10000,
+        directory_outputs=None):
 
     cp_timer = cp_clock.Timer()
 
@@ -21,58 +23,27 @@ def proactive_feature_sequence_classifiers(
     model.freeze()
     torch.set_grad_enabled(False)
 
-    for key_loader_k in loader.keys():
-        if key_loader_k == 'training' or key_loader_k == 'validation':
+    for key_environment_k in environment.keys():
+        if key_environment_k == 'training' or key_environment_k == 'validation':
             pass
         else:
-            raise ValueError('Unknown keys in loader')
+            raise ValueError('Unknown keys in environment')
 
     headers = [
-        'Epoch', 'Unsuccessful_Epochs',
+        'Start_Date', 'Start_Time' 'Duration', 'Elapsed_Time',
 
-        'Training_Unweighted_Loss',
-        'Training_Weighted_Loss',
+        'Training_Chunk', 'Unsuccessful_Training_Chunks',
 
-        'Training_Unweighted_Value_Action_Loss',
-        'Training_Weighted_Value_Action_Loss',
+        'Training_Unscaled_Loss',
+        'Validation_Unscaled_Loss',
+        'Lowest_Validation_Unscaled_Loss',
+        'Is_Lower_Validation_Unscaled_Loss',
 
-        'Training_Unweighted_Class_Prediction_Loss',
-        'Training_Weighted_Class_Prediction_Loss',
-        'Training_Accuracy',
-
-        'Training_Unweighted_Class_Prediction_Loss_In_Last_Time_Point',
-        'Training_Weighted_Class_Prediction_Loss_In_Last_Time_Point',
-        'Training_Accuracy_In_Last_Time_Point',
-
-        'Training_Unweighted_Class_Prediction_Losses_In_Each_Time_Point',
-        'Training_Weighted_Class_Prediction_Losses_In_Each_Time_Point',
-        'Training_Accuracy_In_Each_Time_Point',
-
-        'Validation_Unweighted_Loss',
-        'Validation_Weighted_Loss',
-
-        'Validation_Unweighted_Value_Action_Loss',
-        'Validation_Weighted_Value_Action_Loss',
-
-        'Validation_Unweighted_Class_Prediction_Loss',
-        'Lowest_Validation_Unweighted_Class_Prediction_Loss',
-        'Is_Lower_Validation_Unweighted_Class_Prediction_Loss',
-
-        'Validation_Weighted_Class_Prediction_Loss',
-        'Lowest_Validation_Weighted_Class_Prediction_Loss',
-        'Is_Lower_Validation_Weighted_Class_Prediction_Loss',
-
-        'Validation_Accuracy',
-        'Highest_Validation_Accuracy',
-        'Is_Higher_Accuracy',
-
-        'Validation_Unweighted_Class_Prediction_Loss_In_Last_Time_Point',
-        'Validation_Weighted_Class_Prediction_Loss_In_Last_Time_Point',
-        'Validation_Accuracy_In_Last_Time_Point',
-
-        'Validation_Unweighted_Class_Prediction_Losses_In_Each_Time_Point',
-        'Validation_Weighted_Class_Prediction_Losses_In_Each_Time_Point',
-        'Validation_Accuracy_In_Each_Time_Point']
+        'Training_Scaled_Loss',
+        'Validation_Scaled_Loss',
+        'Lowest_Validation_Scaled_Loss',
+        'Is_Lower_Validation_Scaled_Loss'
+    ]
 
     n_columns = len(headers)
     new_line_stats = [None for i in range(0, n_columns, 1)]  # type: list
@@ -88,17 +59,13 @@ def proactive_feature_sequence_classifiers(
 
     directory_model_at_last_epoch = os.path.join(directory_outputs, 'model_at_last_epoch.pth')
 
-    directory_model_with_lowest_unweighted_class_prediction_loss = os.path.join(
-        directory_outputs, 'model_with_lowest_unweighted_class_prediction_loss.pth')
+    directory_model_with_lowest_unscaled_loss = os.path.join(directory_outputs, 'model_with_lowest_unscaled_loss.pth')
 
-    directory_model_with_lowest_weighted_class_prediction_loss = os.path.join(
-        directory_outputs, 'model_with_lowest_weighted_class_prediction_loss.pth')
+    directory_model_with_lowest_scaled_loss = os.path.join(directory_outputs, 'model_with_lowest_scaled_loss.pth')
 
-    directory_model_with_highest_accuracy = os.path.join(directory_outputs, 'model_with_highest_accuracy.pth')
+    directory_model_with_highest_reward = os.path.join(directory_outputs, 'model_with_highest_reward.pth')
 
     directory_stats = os.path.join(directory_outputs, 'stats.csv')
-
-    separators_times = '  '
 
     n_decimals_for_printing = 6
     n_dashes = 150
@@ -109,11 +76,11 @@ def proactive_feature_sequence_classifiers(
         axis_time_features=model.axis_time_inputs, axis_time_actions=model.axis_time_losses,
         axis_models_actions=model.axis_models_losses)
 
-    lowest_unweighted_class_prediction_loss = math.inf
-    lowest_unweighted_class_prediction_loss_str = str(lowest_unweighted_class_prediction_loss)
+    lowest_unscaled_class_prediction_loss = math.inf
+    lowest_unscaled_class_prediction_loss_str = str(lowest_unscaled_class_prediction_loss)
 
-    lowest_weighted_class_prediction_loss = math.inf
-    lowest_weighted_class_prediction_loss_str = str(lowest_weighted_class_prediction_loss)
+    lowest_scaled_class_prediction_loss = math.inf
+    lowest_scaled_class_prediction_loss_str = str(lowest_scaled_class_prediction_loss)
 
     highest_accuracy = -math.inf
     highest_accuracy_str = str(highest_accuracy)
@@ -146,26 +113,26 @@ def proactive_feature_sequence_classifiers(
         # Each epoch has a training and a validation phase
         # training phase
 
-        running_unweighted_loss_e = 0.0
-        running_weighted_loss_e = 0.0
+        running_unscaled_loss_e = 0.0
+        running_scaled_loss_e = 0.0
 
         running_n_selected_actions_e = 0
-        running_unweighted_value_action_loss_e = 0.0
-        running_weighted_value_action_loss_e = 0.0
+        running_unscaled_value_action_loss_e = 0.0
+        running_scaled_value_action_loss_e = 0.0
 
         running_n_corrects_e = 0
         running_n_classifications_e = 0
-        running_unweighted_class_prediction_loss_e = 0.0
-        running_weighted_class_prediction_loss_e = 0.0
+        running_unscaled_class_prediction_loss_e = 0.0
+        running_scaled_class_prediction_loss_e = 0.0
 
-        running_n_corrects_T_e = 0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
-        running_n_classifications_T_e = 0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
-        running_unweighted_class_prediction_losses_T_e = 0.0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
-        running_weighted_class_prediction_losses_T_e = 0.0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
+        running_n_corrects_T_e = 0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        running_n_classifications_T_e = 0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        running_unscaled_class_prediction_losses_T_e = 0.0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        running_scaled_class_prediction_losses_T_e = 0.0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
 
         b = 0
         # Iterate over data.
-        for environments_eb in loader['training']:
+        for environments_eb in environment['training']:
 
             replay_memory.clear()
 
@@ -247,36 +214,36 @@ def proactive_feature_sequence_classifiers(
             class_prediction_losses_eb = model.compute_class_prediction_losses(
                 predictions_classes=predictions_classes_eb, labels=states_labels_eb)
 
-            weighted_value_action_loss_eb = model.reduce_value_action_losses(
+            scaled_value_action_loss_eb = model.reduce_value_action_losses(
                 value_action_losses=value_action_losses_eb, axes_not_included=None,
-                weighted=True, loss_weights_actors=None, format_weights=False)
+                scaled=True, loss_scales_actors=None, format_scales=False)
 
-            weighted_class_prediction_loss_eb = model.reduce_class_prediction_losses(
+            scaled_class_prediction_loss_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=None,
-                weighted=True, loss_weights_classifiers=None, format_weights=False)
+                scaled=True, loss_scales_classifiers=None, format_scales=False)
 
-            weighted_loss_eb = model.compute_multitask_losses(
-                value_action_loss=weighted_value_action_loss_eb,
-                class_prediction_loss=weighted_class_prediction_loss_eb, weighted=True)
+            scaled_loss_eb = model.compute_multitask_losses(
+                value_action_loss=scaled_value_action_loss_eb,
+                class_prediction_loss=scaled_class_prediction_loss_eb, scaled=True)
 
-            weighted_loss_eb.backward()
+            scaled_loss_eb.backward()
             optimizer.step()
 
             model.eval()
             model.freeze()
             torch.set_grad_enabled(False)
 
-            unweighted_value_action_loss_eb = model.reduce_value_action_losses(
+            unscaled_value_action_loss_eb = model.reduce_value_action_losses(
                 value_action_losses=value_action_losses_eb, axes_not_included=None,
-                weighted=False, loss_weights_actors=None, format_weights=False)
+                scaled=False, loss_scales_actors=None, format_scales=False)
 
-            unweighted_class_prediction_loss_eb = model.reduce_class_prediction_losses(
+            unscaled_class_prediction_loss_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=None,
-                weighted=False, loss_weights_classifiers=None, format_weights=False)
+                scaled=False, loss_scales_classifiers=None, format_scales=False)
 
-            unweighted_loss_eb = model.compute_multitask_losses(
-                value_action_loss=unweighted_value_action_loss_eb,
-                class_prediction_loss=unweighted_class_prediction_loss_eb, weighted=False)
+            unscaled_loss_eb = model.compute_multitask_losses(
+                value_action_loss=unscaled_value_action_loss_eb,
+                class_prediction_loss=unscaled_class_prediction_loss_eb, scaled=False)
 
             n_selected_actions_eb = model.compute_n_selected_actions(
                 selected_actions=actions_eb, axes_not_included=None)
@@ -291,19 +258,19 @@ def proactive_feature_sequence_classifiers(
                 classifications=classifications_eb, axes_not_included=None)
             n_actions_and_classifications_eb = n_selected_actions_eb + n_classifications_eb
 
-            running_unweighted_loss_e += (unweighted_loss_eb.item() * n_actions_and_classifications_eb)
-            running_weighted_loss_e += (weighted_loss_eb.item() * n_actions_and_classifications_eb)
+            running_unscaled_loss_e += (unscaled_loss_eb.item() * n_actions_and_classifications_eb)
+            running_scaled_loss_e += (scaled_loss_eb.item() * n_actions_and_classifications_eb)
 
             running_n_selected_actions_e += n_selected_actions_eb
-            running_unweighted_value_action_loss_e += (unweighted_value_action_loss_eb.item() * n_selected_actions_eb)
-            running_weighted_value_action_loss_e += (weighted_value_action_loss_eb.item() * n_selected_actions_eb)
+            running_unscaled_value_action_loss_e += (unscaled_value_action_loss_eb.item() * n_selected_actions_eb)
+            running_scaled_value_action_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
 
             running_n_corrects_e += n_corrects_eb
             running_n_classifications_e += n_classifications_eb
-            running_unweighted_class_prediction_loss_e += (
-                        unweighted_class_prediction_loss_eb.item() * n_classifications_eb)
-            running_weighted_class_prediction_loss_e += (
-                        weighted_class_prediction_loss_eb.item() * n_classifications_eb)
+            running_unscaled_class_prediction_loss_e += (
+                        unscaled_class_prediction_loss_eb.item() * n_classifications_eb)
+            running_scaled_class_prediction_loss_e += (
+                        scaled_class_prediction_loss_eb.item() * n_classifications_eb)
 
             # compute accuracy for each time point
             n_corrects_T_eb = model.compute_n_corrects(
@@ -313,91 +280,91 @@ def proactive_feature_sequence_classifiers(
                 classifications=classifications_eb, axes_not_included=model.axis_time_losses)
 
             # compute class prediction losses for each time point
-            unweighted_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
+            unscaled_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=model.axis_time_losses,
-                weighted=False, loss_weights_classifiers=None, format_weights=False)
+                scaled=False, loss_scales_classifiers=None, format_scales=False)
 
-            weighted_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
+            scaled_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=model.axis_time_losses,
-                weighted=True, loss_weights_classifiers=None, format_weights=False)
+                scaled=True, loss_scales_classifiers=None, format_scales=False)
 
             running_n_corrects_T_e += n_corrects_T_eb
             running_n_classifications_T_e += n_classifications_T_eb
-            running_unweighted_class_prediction_losses_T_e += (
-                        unweighted_class_prediction_losses_T_eb * n_classifications_T_eb)
-            running_weighted_class_prediction_losses_T_e += (
-                        weighted_class_prediction_losses_T_eb * n_classifications_T_eb)
+            running_unscaled_class_prediction_losses_T_e += (
+                        unscaled_class_prediction_losses_T_eb * n_classifications_T_eb)
+            running_scaled_class_prediction_losses_T_e += (
+                        scaled_class_prediction_losses_T_eb * n_classifications_T_eb)
 
             b += 1
 
         # scheduler.step()
 
         running_n_actions_and_classifications_e = running_n_selected_actions_e + running_n_classifications_e
-        unweighted_loss_e = running_unweighted_loss_e / running_n_actions_and_classifications_e
-        weighted_loss_e = running_weighted_loss_e / running_n_actions_and_classifications_e
+        unscaled_loss_e = running_unscaled_loss_e / running_n_actions_and_classifications_e
+        scaled_loss_e = running_scaled_loss_e / running_n_actions_and_classifications_e
 
-        unweighted_value_action_loss_e = running_unweighted_value_action_loss_e / running_n_selected_actions_e
-        weighted_value_action_loss_e = running_weighted_value_action_loss_e / running_n_selected_actions_e
+        unscaled_value_action_loss_e = running_unscaled_value_action_loss_e / running_n_selected_actions_e
+        scaled_value_action_loss_e = running_scaled_value_action_loss_e / running_n_selected_actions_e
 
-        unweighted_class_prediction_loss_e = running_unweighted_class_prediction_loss_e / running_n_classifications_e
-        weighted_class_prediction_loss_e = running_weighted_class_prediction_loss_e / running_n_classifications_e
+        unscaled_class_prediction_loss_e = running_unscaled_class_prediction_loss_e / running_n_classifications_e
+        scaled_class_prediction_loss_e = running_scaled_class_prediction_loss_e / running_n_classifications_e
         accuracy_e = running_n_corrects_e / running_n_classifications_e
 
-        unweighted_class_prediction_losses_T_e = (
-                    running_unweighted_class_prediction_losses_T_e / running_n_classifications_T_e)
-        weighted_class_prediction_losses_T_e = (
-                    running_weighted_class_prediction_losses_T_e / running_n_classifications_T_e)
+        unscaled_class_prediction_losses_T_e = (
+                    running_unscaled_class_prediction_losses_T_e / running_n_classifications_T_e)
+        scaled_class_prediction_losses_T_e = (
+                    running_scaled_class_prediction_losses_T_e / running_n_classifications_T_e)
         accuracy_T_e = (running_n_corrects_T_e / running_n_classifications_T_e)
 
-        last_unweighted_class_prediction_loss_e = unweighted_class_prediction_losses_T_e[-1].item()
-        last_weighted_class_prediction_loss_e = weighted_class_prediction_losses_T_e[-1].item()
+        last_unscaled_class_prediction_loss_e = unscaled_class_prediction_losses_T_e[-1].item()
+        last_scaled_class_prediction_loss_e = scaled_class_prediction_losses_T_e[-1].item()
         last_accuracy_e = accuracy_T_e[-1].item()
 
-        stats['lines'][e][stats['headers']['Training_Unweighted_Loss']] = unweighted_loss_e
-        stats['lines'][e][stats['headers']['Training_Weighted_Loss']] = weighted_loss_e
+        stats['lines'][e][stats['headers']['Training_Unscaled_Loss']] = unscaled_loss_e
+        stats['lines'][e][stats['headers']['Training_Scaled_Loss']] = scaled_loss_e
 
-        stats['lines'][e][stats['headers']['Training_Unweighted_Value_Action_Loss']] = unweighted_value_action_loss_e
-        stats['lines'][e][stats['headers']['Training_Weighted_Value_Action_Loss']] = weighted_value_action_loss_e
+        stats['lines'][e][stats['headers']['Training_Unscaled_Value_Action_Loss']] = unscaled_value_action_loss_e
+        stats['lines'][e][stats['headers']['Training_Scaled_Value_Action_Loss']] = scaled_value_action_loss_e
 
-        stats['lines'][e][stats['headers']['Training_Unweighted_Class_Prediction_Loss']] = (
-            unweighted_class_prediction_loss_e)
-        stats['lines'][e][stats['headers']['Training_Weighted_Class_Prediction_Loss']] = (
-            weighted_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Training_Unscaled_Class_Prediction_Loss']] = (
+            unscaled_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Training_Scaled_Class_Prediction_Loss']] = (
+            scaled_class_prediction_loss_e)
         stats['lines'][e][stats['headers']['Training_Accuracy']] = accuracy_e
 
-        stats['lines'][e][stats['headers']['Training_Unweighted_Class_Prediction_Loss_In_Last_Time_Point']] = (
-            last_unweighted_class_prediction_loss_e)
-        stats['lines'][e][stats['headers']['Training_Weighted_Class_Prediction_Loss_In_Last_Time_Point']] = (
-            last_weighted_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Training_Unscaled_Class_Prediction_Loss_In_Last_Time_Point']] = (
+            last_unscaled_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Training_Scaled_Class_Prediction_Loss_In_Last_Time_Point']] = (
+            last_scaled_class_prediction_loss_e)
         stats['lines'][e][stats['headers']['Training_Accuracy_In_Last_Time_Point']] = last_accuracy_e
 
-        stats['lines'][e][stats['headers']['Training_Unweighted_Class_Prediction_Losses_In_Each_Time_Point']] = (
-            separators_times.join([str(t) for t in unweighted_class_prediction_losses_T_e.tolist()]))
-        stats['lines'][e][stats['headers']['Training_Weighted_Class_Prediction_Losses_In_Each_Time_Point']] = (
-            separators_times.join([str(t) for t in weighted_class_prediction_losses_T_e.tolist()]))
+        stats['lines'][e][stats['headers']['Training_Unscaled_Class_Prediction_Losses_In_Each_Time_Point']] = (
+            separators_times.join([str(t) for t in unscaled_class_prediction_losses_T_e.tolist()]))
+        stats['lines'][e][stats['headers']['Training_Scaled_Class_Prediction_Losses_In_Each_Time_Point']] = (
+            separators_times.join([str(t) for t in scaled_class_prediction_losses_T_e.tolist()]))
         stats['lines'][e][stats['headers']['Training_Accuracy_In_Each_Time_Point']] = separators_times.join(
             [str(t) for t in accuracy_T_e.tolist()])
 
-        unweighted_loss_str_e = cp_strings.format_float_to_str(
-            unweighted_loss_e, n_decimals=n_decimals_for_printing)
-        weighted_loss_str_e = cp_strings.format_float_to_str(weighted_loss_e, n_decimals=n_decimals_for_printing)
+        unscaled_loss_str_e = cp_strings.format_float_to_str(
+            unscaled_loss_e, n_decimals=n_decimals_for_printing)
+        scaled_loss_str_e = cp_strings.format_float_to_str(scaled_loss_e, n_decimals=n_decimals_for_printing)
 
-        unweighted_value_action_loss_str_e = cp_strings.format_float_to_str(
-            unweighted_value_action_loss_e, n_decimals=n_decimals_for_printing)
+        unscaled_value_action_loss_str_e = cp_strings.format_float_to_str(
+            unscaled_value_action_loss_e, n_decimals=n_decimals_for_printing)
 
-        weighted_value_action_loss_str_e = cp_strings.format_float_to_str(
-            weighted_value_action_loss_e, n_decimals=n_decimals_for_printing)
+        scaled_value_action_loss_str_e = cp_strings.format_float_to_str(
+            scaled_value_action_loss_e, n_decimals=n_decimals_for_printing)
 
-        unweighted_class_prediction_loss_str_e = cp_strings.format_float_to_str(
-            unweighted_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
-        weighted_class_prediction_loss_str_e = cp_strings.format_float_to_str(
-            weighted_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
+        unscaled_class_prediction_loss_str_e = cp_strings.format_float_to_str(
+            unscaled_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
+        scaled_class_prediction_loss_str_e = cp_strings.format_float_to_str(
+            scaled_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
         accuracy_str_e = cp_strings.format_float_to_str(accuracy_e, n_decimals=n_decimals_for_printing)
 
         print(
-            'Epoch: {e:d}. Training. Unweighted Value Action Loss: {action_loss:s}. Unweighted Classification Loss: {class_prediction_loss:s}. Accuracy: {accuracy:s}.'.format(
-                e=e, action_loss=unweighted_value_action_loss_str_e,
-                class_prediction_loss=unweighted_class_prediction_loss_str_e, accuracy=accuracy_str_e))
+            'Epoch: {e:d}. Training. Unscaled Value Action Loss: {action_loss:s}. Unscaled Classification Loss: {class_prediction_loss:s}. Accuracy: {accuracy:s}.'.format(
+                e=e, action_loss=unscaled_value_action_loss_str_e,
+                class_prediction_loss=unscaled_class_prediction_loss_str_e, accuracy=accuracy_str_e))
 
         epsilon = epsilon + epsilon_step
         if epsilon < epsilon_end:
@@ -405,26 +372,26 @@ def proactive_feature_sequence_classifiers(
 
         # validation phase
 
-        running_unweighted_loss_e = 0.0
-        running_weighted_loss_e = 0.0
+        running_unscaled_loss_e = 0.0
+        running_scaled_loss_e = 0.0
 
         running_n_selected_actions_e = 0
-        running_unweighted_value_action_loss_e = 0.0
-        running_weighted_value_action_loss_e = 0.0
+        running_unscaled_value_action_loss_e = 0.0
+        running_scaled_value_action_loss_e = 0.0
 
         running_n_corrects_e = 0
         running_n_classifications_e = 0
-        running_unweighted_class_prediction_loss_e = 0.0
-        running_weighted_class_prediction_loss_e = 0.0
+        running_unscaled_class_prediction_loss_e = 0.0
+        running_scaled_class_prediction_loss_e = 0.0
 
-        running_n_corrects_T_e = 0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
-        running_n_classifications_T_e = 0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
-        running_unweighted_class_prediction_losses_T_e = 0.0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
-        running_weighted_class_prediction_losses_T_e = 0.0  # type: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor]
+        running_n_corrects_T_e = 0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        running_n_classifications_T_e = 0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        running_unscaled_class_prediction_losses_T_e = 0.0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        running_scaled_class_prediction_losses_T_e = 0.0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
 
         b = 0
         # Iterate over data.
-        for environments_eb in loader['validation']:
+        for environments_eb in environment['validation']:
 
             replay_memory.clear()
 
@@ -453,9 +420,6 @@ def proactive_feature_sequence_classifiers(
                         class_prediction_losses=class_prediction_losses_ebt)
 
                 delta_ebt = model.compute_deltas(action_ebt)
-
-                if delta_preprocessor is not None:
-                    delta_ebt = delta_preprocessor(delta_ebt)
 
                 environments_eb.step(delta_ebt)
 
@@ -498,29 +462,29 @@ def proactive_feature_sequence_classifiers(
             class_prediction_losses_eb = model.compute_class_prediction_losses(
                 predictions_classes=predictions_classes_eb, labels=states_labels_eb)
 
-            weighted_value_action_loss_eb = model.reduce_value_action_losses(
+            scaled_value_action_loss_eb = model.reduce_value_action_losses(
                 value_action_losses=value_action_losses_eb, axes_not_included=None,
-                weighted=True, loss_weights_actors=None, format_weights=False)
+                scaled=True, loss_scales_actors=None, format_scales=False)
 
-            weighted_class_prediction_loss_eb = model.reduce_class_prediction_losses(
+            scaled_class_prediction_loss_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=None,
-                weighted=True, loss_weights_classifiers=None, format_weights=False)
+                scaled=True, loss_scales_classifiers=None, format_scales=False)
 
-            weighted_loss_eb = model.compute_multitask_losses(
-                value_action_loss=weighted_value_action_loss_eb,
-                class_prediction_loss=weighted_class_prediction_loss_eb, weighted=True)
+            scaled_loss_eb = model.compute_multitask_losses(
+                value_action_loss=scaled_value_action_loss_eb,
+                class_prediction_loss=scaled_class_prediction_loss_eb, scaled=True)
 
-            unweighted_value_action_loss_eb = model.reduce_value_action_losses(
+            unscaled_value_action_loss_eb = model.reduce_value_action_losses(
                 value_action_losses=value_action_losses_eb, axes_not_included=None,
-                weighted=False, loss_weights_actors=None, format_weights=False)
+                scaled=False, loss_scales_actors=None, format_scales=False)
 
-            unweighted_class_prediction_loss_eb = model.reduce_class_prediction_losses(
+            unscaled_class_prediction_loss_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=None,
-                weighted=False, loss_weights_classifiers=None, format_weights=False)
+                scaled=False, loss_scales_classifiers=None, format_scales=False)
 
-            unweighted_loss_eb = model.compute_multitask_losses(
-                value_action_loss=unweighted_value_action_loss_eb,
-                class_prediction_loss=unweighted_class_prediction_loss_eb, weighted=False)
+            unscaled_loss_eb = model.compute_multitask_losses(
+                value_action_loss=unscaled_value_action_loss_eb,
+                class_prediction_loss=unscaled_class_prediction_loss_eb, scaled=False)
 
             n_selected_actions_eb = model.compute_n_selected_actions(
                 selected_actions=actions_eb, axes_not_included=None)
@@ -535,19 +499,19 @@ def proactive_feature_sequence_classifiers(
                 classifications=classifications_eb, axes_not_included=None)
             n_actions_and_classifications_eb = n_selected_actions_eb + n_classifications_eb
 
-            running_unweighted_loss_e += (unweighted_loss_eb.item() * n_actions_and_classifications_eb)
-            running_weighted_loss_e += (weighted_loss_eb.item() * n_actions_and_classifications_eb)
+            running_unscaled_loss_e += (unscaled_loss_eb.item() * n_actions_and_classifications_eb)
+            running_scaled_loss_e += (scaled_loss_eb.item() * n_actions_and_classifications_eb)
 
             running_n_selected_actions_e += n_selected_actions_eb
-            running_unweighted_value_action_loss_e += (unweighted_value_action_loss_eb.item() * n_selected_actions_eb)
-            running_weighted_value_action_loss_e += (weighted_value_action_loss_eb.item() * n_selected_actions_eb)
+            running_unscaled_value_action_loss_e += (unscaled_value_action_loss_eb.item() * n_selected_actions_eb)
+            running_scaled_value_action_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
 
             running_n_corrects_e += n_corrects_eb
             running_n_classifications_e += n_classifications_eb
-            running_unweighted_class_prediction_loss_e += (
-                        unweighted_class_prediction_loss_eb.item() * n_classifications_eb)
-            running_weighted_class_prediction_loss_e += (
-                        weighted_class_prediction_loss_eb.item() * n_classifications_eb)
+            running_unscaled_class_prediction_loss_e += (
+                        unscaled_class_prediction_loss_eb.item() * n_classifications_eb)
+            running_scaled_class_prediction_loss_e += (
+                        scaled_class_prediction_loss_eb.item() * n_classifications_eb)
 
             # compute accuracy for each time point
             n_corrects_T_eb = model.compute_n_corrects(
@@ -557,66 +521,66 @@ def proactive_feature_sequence_classifiers(
                 classifications=classifications_eb, axes_not_included=model.axis_time_losses)
 
             # compute class prediction losses for each time point
-            unweighted_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
+            unscaled_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=model.axis_time_losses,
-                weighted=False, loss_weights_classifiers=None, format_weights=False)
+                scaled=False, loss_scales_classifiers=None, format_scales=False)
 
-            weighted_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
+            scaled_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
                 class_prediction_losses=class_prediction_losses_eb, axes_not_included=model.axis_time_losses,
-                weighted=True, loss_weights_classifiers=None, format_weights=False)
+                scaled=True, loss_scales_classifiers=None, format_scales=False)
 
             running_n_corrects_T_e += n_corrects_T_eb
             running_n_classifications_T_e += n_classifications_T_eb
-            running_unweighted_class_prediction_losses_T_e += (
-                        unweighted_class_prediction_losses_T_eb * n_classifications_T_eb)
-            running_weighted_class_prediction_losses_T_e += (
-                        weighted_class_prediction_losses_T_eb * n_classifications_T_eb)
+            running_unscaled_class_prediction_losses_T_e += (
+                        unscaled_class_prediction_losses_T_eb * n_classifications_T_eb)
+            running_scaled_class_prediction_losses_T_e += (
+                        scaled_class_prediction_losses_T_eb * n_classifications_T_eb)
 
             b += 1
 
         running_n_actions_and_classifications_e = running_n_selected_actions_e + running_n_classifications_e
-        unweighted_loss_e = running_unweighted_loss_e / running_n_actions_and_classifications_e
-        weighted_loss_e = running_weighted_loss_e / running_n_actions_and_classifications_e
+        unscaled_loss_e = running_unscaled_loss_e / running_n_actions_and_classifications_e
+        scaled_loss_e = running_scaled_loss_e / running_n_actions_and_classifications_e
 
-        unweighted_value_action_loss_e = running_unweighted_value_action_loss_e / running_n_selected_actions_e
-        weighted_value_action_loss_e = running_weighted_value_action_loss_e / running_n_selected_actions_e
+        unscaled_value_action_loss_e = running_unscaled_value_action_loss_e / running_n_selected_actions_e
+        scaled_value_action_loss_e = running_scaled_value_action_loss_e / running_n_selected_actions_e
 
-        unweighted_class_prediction_loss_e = running_unweighted_class_prediction_loss_e / running_n_classifications_e
-        weighted_class_prediction_loss_e = running_weighted_class_prediction_loss_e / running_n_classifications_e
+        unscaled_class_prediction_loss_e = running_unscaled_class_prediction_loss_e / running_n_classifications_e
+        scaled_class_prediction_loss_e = running_scaled_class_prediction_loss_e / running_n_classifications_e
         accuracy_e = running_n_corrects_e / running_n_classifications_e
 
-        unweighted_class_prediction_losses_T_e = (
-                    running_unweighted_class_prediction_losses_T_e / running_n_classifications_T_e)
-        weighted_class_prediction_losses_T_e = (
-                    running_weighted_class_prediction_losses_T_e / running_n_classifications_T_e)
+        unscaled_class_prediction_losses_T_e = (
+                    running_unscaled_class_prediction_losses_T_e / running_n_classifications_T_e)
+        scaled_class_prediction_losses_T_e = (
+                    running_scaled_class_prediction_losses_T_e / running_n_classifications_T_e)
         accuracy_T_e = (running_n_corrects_T_e / running_n_classifications_T_e)
 
-        last_unweighted_class_prediction_loss_e = unweighted_class_prediction_losses_T_e[-1].item()
-        last_weighted_class_prediction_loss_e = weighted_class_prediction_losses_T_e[-1].item()
+        last_unscaled_class_prediction_loss_e = unscaled_class_prediction_losses_T_e[-1].item()
+        last_scaled_class_prediction_loss_e = scaled_class_prediction_losses_T_e[-1].item()
         last_accuracy_e = accuracy_T_e[-1].item()
 
-        stats['lines'][e][stats['headers']['Validation_Unweighted_Loss']] = unweighted_loss_e
-        stats['lines'][e][stats['headers']['Validation_Weighted_Loss']] = weighted_loss_e
+        stats['lines'][e][stats['headers']['Validation_Unscaled_Loss']] = unscaled_loss_e
+        stats['lines'][e][stats['headers']['Validation_Scaled_Loss']] = scaled_loss_e
 
-        stats['lines'][e][stats['headers']['Validation_Unweighted_Value_Action_Loss']] = unweighted_value_action_loss_e
-        stats['lines'][e][stats['headers']['Validation_Weighted_Value_Action_Loss']] = weighted_value_action_loss_e
+        stats['lines'][e][stats['headers']['Validation_Unscaled_Value_Action_Loss']] = unscaled_value_action_loss_e
+        stats['lines'][e][stats['headers']['Validation_Scaled_Value_Action_Loss']] = scaled_value_action_loss_e
 
-        stats['lines'][e][stats['headers']['Validation_Unweighted_Class_Prediction_Loss']] = (
-            unweighted_class_prediction_loss_e)
-        stats['lines'][e][stats['headers']['Validation_Weighted_Class_Prediction_Loss']] = (
-            weighted_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Validation_Unscaled_Class_Prediction_Loss']] = (
+            unscaled_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Validation_Scaled_Class_Prediction_Loss']] = (
+            scaled_class_prediction_loss_e)
         stats['lines'][e][stats['headers']['Validation_Accuracy']] = accuracy_e
 
-        stats['lines'][e][stats['headers']['Validation_Unweighted_Class_Prediction_Loss_In_Last_Time_Point']] = (
-            last_unweighted_class_prediction_loss_e)
-        stats['lines'][e][stats['headers']['Validation_Weighted_Class_Prediction_Loss_In_Last_Time_Point']] = (
-            last_weighted_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Validation_Unscaled_Class_Prediction_Loss_In_Last_Time_Point']] = (
+            last_unscaled_class_prediction_loss_e)
+        stats['lines'][e][stats['headers']['Validation_Scaled_Class_Prediction_Loss_In_Last_Time_Point']] = (
+            last_scaled_class_prediction_loss_e)
         stats['lines'][e][stats['headers']['Validation_Accuracy_In_Last_Time_Point']] = last_accuracy_e
 
-        stats['lines'][e][stats['headers']['Validation_Unweighted_Class_Prediction_Losses_In_Each_Time_Point']] = (
-            separators_times.join([str(t) for t in unweighted_class_prediction_losses_T_e.tolist()]))
-        stats['lines'][e][stats['headers']['Validation_Weighted_Class_Prediction_Losses_In_Each_Time_Point']] = (
-            separators_times.join([str(t) for t in weighted_class_prediction_losses_T_e.tolist()]))
+        stats['lines'][e][stats['headers']['Validation_Unscaled_Class_Prediction_Losses_In_Each_Time_Point']] = (
+            separators_times.join([str(t) for t in unscaled_class_prediction_losses_T_e.tolist()]))
+        stats['lines'][e][stats['headers']['Validation_Scaled_Class_Prediction_Losses_In_Each_Time_Point']] = (
+            separators_times.join([str(t) for t in scaled_class_prediction_losses_T_e.tolist()]))
         stats['lines'][e][stats['headers']['Validation_Accuracy_In_Each_Time_Point']] = (
             separators_times.join([str(t) for t in accuracy_T_e.tolist()]))
 
@@ -627,41 +591,41 @@ def proactive_feature_sequence_classifiers(
 
         is_successful_epoch = False
 
-        if unweighted_class_prediction_loss_e < lowest_unweighted_class_prediction_loss:
+        if unscaled_class_prediction_loss_e < lowest_unscaled_class_prediction_loss:
 
-            lowest_unweighted_class_prediction_loss = unweighted_class_prediction_loss_e
-            lowest_unweighted_class_prediction_loss_str = cp_strings.format_float_to_str(
-                lowest_unweighted_class_prediction_loss, n_decimals=n_decimals_for_printing)
+            lowest_unscaled_class_prediction_loss = unscaled_class_prediction_loss_e
+            lowest_unscaled_class_prediction_loss_str = cp_strings.format_float_to_str(
+                lowest_unscaled_class_prediction_loss, n_decimals=n_decimals_for_printing)
 
-            stats['lines'][e][stats['headers']['Is_Lower_Validation_Unweighted_Class_Prediction_Loss']] = 1
+            stats['lines'][e][stats['headers']['Is_Lower_Validation_Unscaled_Class_Prediction_Loss']] = 1
             is_successful_epoch = True
 
-            if os.path.isfile(directory_model_with_lowest_unweighted_class_prediction_loss):
-                os.remove(directory_model_with_lowest_unweighted_class_prediction_loss)
-            torch.save(model_dict, directory_model_with_lowest_unweighted_class_prediction_loss)
+            if os.path.isfile(directory_model_with_lowest_unscaled_class_prediction_loss):
+                os.remove(directory_model_with_lowest_unscaled_class_prediction_loss)
+            torch.save(model_dict, directory_model_with_lowest_unscaled_class_prediction_loss)
         else:
-            stats['lines'][e][stats['headers']['Is_Lower_Validation_Unweighted_Class_Prediction_Loss']] = 0
+            stats['lines'][e][stats['headers']['Is_Lower_Validation_Unscaled_Class_Prediction_Loss']] = 0
 
-        stats['lines'][e][stats['headers']['Lowest_Validation_Unweighted_Class_Prediction_Loss']] = (
-            lowest_unweighted_class_prediction_loss)
+        stats['lines'][e][stats['headers']['Lowest_Validation_Unscaled_Class_Prediction_Loss']] = (
+            lowest_unscaled_class_prediction_loss)
 
-        if weighted_class_prediction_loss_e < lowest_weighted_class_prediction_loss:
+        if scaled_class_prediction_loss_e < lowest_scaled_class_prediction_loss:
 
-            lowest_weighted_class_prediction_loss = weighted_class_prediction_loss_e
-            lowest_weighted_class_prediction_loss_str = cp_strings.format_float_to_str(
-                lowest_weighted_class_prediction_loss, n_decimals=n_decimals_for_printing)
+            lowest_scaled_class_prediction_loss = scaled_class_prediction_loss_e
+            lowest_scaled_class_prediction_loss_str = cp_strings.format_float_to_str(
+                lowest_scaled_class_prediction_loss, n_decimals=n_decimals_for_printing)
 
-            stats['lines'][e][stats['headers']['Is_Lower_Validation_Weighted_Class_Prediction_Loss']] = 1
+            stats['lines'][e][stats['headers']['Is_Lower_Validation_Scaled_Class_Prediction_Loss']] = 1
             is_successful_epoch = True
 
-            if os.path.isfile(directory_model_with_lowest_weighted_class_prediction_loss):
-                os.remove(directory_model_with_lowest_weighted_class_prediction_loss)
-            torch.save(model_dict, directory_model_with_lowest_weighted_class_prediction_loss)
+            if os.path.isfile(directory_model_with_lowest_scaled_class_prediction_loss):
+                os.remove(directory_model_with_lowest_scaled_class_prediction_loss)
+            torch.save(model_dict, directory_model_with_lowest_scaled_class_prediction_loss)
         else:
-            stats['lines'][e][stats['headers']['Is_Lower_Validation_Weighted_Class_Prediction_Loss']] = 0
+            stats['lines'][e][stats['headers']['Is_Lower_Validation_Scaled_Class_Prediction_Loss']] = 0
 
-        stats['lines'][e][stats['headers']['Lowest_Validation_Weighted_Class_Prediction_Loss']] = (
-            lowest_weighted_class_prediction_loss)
+        stats['lines'][e][stats['headers']['Lowest_Validation_Scaled_Class_Prediction_Loss']] = (
+            lowest_scaled_class_prediction_loss)
 
         if accuracy_e > highest_accuracy:
             highest_accuracy = accuracy_e
@@ -690,26 +654,26 @@ def proactive_feature_sequence_classifiers(
 
         cp_txt.lines_to_csv_file(stats['lines'], directory_stats, stats['headers'])
 
-        unweighted_loss_str_e = cp_strings.format_float_to_str(
-            unweighted_loss_e, n_decimals=n_decimals_for_printing)
-        weighted_loss_str_e = cp_strings.format_float_to_str(weighted_loss_e, n_decimals=n_decimals_for_printing)
+        unscaled_loss_str_e = cp_strings.format_float_to_str(
+            unscaled_loss_e, n_decimals=n_decimals_for_printing)
+        scaled_loss_str_e = cp_strings.format_float_to_str(scaled_loss_e, n_decimals=n_decimals_for_printing)
 
-        unweighted_value_action_loss_str_e = cp_strings.format_float_to_str(
-            unweighted_value_action_loss_e, n_decimals=n_decimals_for_printing)
+        unscaled_value_action_loss_str_e = cp_strings.format_float_to_str(
+            unscaled_value_action_loss_e, n_decimals=n_decimals_for_printing)
 
-        weighted_value_action_loss_str_e = cp_strings.format_float_to_str(
-            weighted_value_action_loss_e, n_decimals=n_decimals_for_printing)
+        scaled_value_action_loss_str_e = cp_strings.format_float_to_str(
+            scaled_value_action_loss_e, n_decimals=n_decimals_for_printing)
 
-        unweighted_class_prediction_loss_str_e = cp_strings.format_float_to_str(
-            unweighted_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
-        weighted_class_prediction_loss_str_e = cp_strings.format_float_to_str(
-            weighted_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
+        unscaled_class_prediction_loss_str_e = cp_strings.format_float_to_str(
+            unscaled_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
+        scaled_class_prediction_loss_str_e = cp_strings.format_float_to_str(
+            scaled_class_prediction_loss_e, n_decimals=n_decimals_for_printing)
         accuracy_str_e = cp_strings.format_float_to_str(accuracy_e, n_decimals=n_decimals_for_printing)
 
         print(
-            'Epoch: {e:d}. Validation. Unweighted Value Action Loss: {action_loss:s}. Unweighted Classification Loss: {class_prediction_loss:s}. Accuracy: {accuracy:s}.'.format(
-                e=e, action_loss=unweighted_value_action_loss_str_e,
-                class_prediction_loss=unweighted_class_prediction_loss_str_e, accuracy=accuracy_str_e))
+            'Epoch: {e:d}. Validation. Unscaled Value Action Loss: {action_loss:s}. Unscaled Classification Loss: {class_prediction_loss:s}. Accuracy: {accuracy:s}.'.format(
+                e=e, action_loss=unscaled_value_action_loss_str_e,
+                class_prediction_loss=unscaled_class_prediction_loss_str_e, accuracy=accuracy_str_e))
 
         print('Epoch {e:d} - Unsuccessful Epochs {i:d}.'.format(e=e, i=i))
 
@@ -727,8 +691,8 @@ def proactive_feature_sequence_classifiers(
         d=time_training.days, h=time_training.hours,
         m=time_training.minutes, s=time_training.seconds))
     print('Number of Epochs: {E:d}'.format(E=E))
-    print('Lowest Unweighted Classification Loss: {:s}'.format(lowest_unweighted_class_prediction_loss_str))
-    print('Lowest Weighted Classification Loss: {:s}'.format(lowest_weighted_class_prediction_loss_str))
+    print('Lowest Unscaled Classification Loss: {:s}'.format(lowest_unscaled_class_prediction_loss_str))
+    print('Lowest Scaled Classification Loss: {:s}'.format(lowest_scaled_class_prediction_loss_str))
     print('Highest Accuracy: {:s}'.format(highest_accuracy_str))
 
     return None

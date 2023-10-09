@@ -9,7 +9,6 @@ from .... import strings as cp_strings
 from .... import txt as cp_txt
 
 
-
 def proactive_feature_sequence_classifiers(
         model, loader, delta_preprocessor, optimizer, I=10, E=None, T=None,
         epsilon_start=.9, epsilon_end=.2, epsilon_step=-.1, directory_outputs=None):
