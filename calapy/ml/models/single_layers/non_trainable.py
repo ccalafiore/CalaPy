@@ -3,7 +3,7 @@
 import numpy as np
 import torch
 from ..model_tools import ModelMethods as CPModelMethods
-from ... import tensor as cp_tensor
+from ... import tensors as cp_tensors
 
 __all__ = ['NoiseLayer']
 
@@ -51,6 +51,6 @@ class NoiseLayer(CPModelMethods):
         # :type x: torch.Tensor # | list[torch.Tensor] | tuple[torch.Tensor]
 
         if self.training:
-            return cp_tensor.add_noise(x=x, scale=self.scale, mu=self.mu, generator=generator)
+            return cp_tensors.add_noise(x=x, scale=self.scale, mu=self.mu, generator=generator)
         else:
             return x

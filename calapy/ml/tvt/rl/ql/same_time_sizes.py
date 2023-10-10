@@ -4,9 +4,9 @@ import os
 import copy
 import math
 import torch
-from .... import clock as cp_clock
-from .... import strings as cp_strings
-from .... import txt as cp_txt
+from ..... import clock as cp_clock
+from ..... import strings as cp_strings
+from ..... import txt as cp_txt
 
 
 def proactive_feature_sequence_classifiers(

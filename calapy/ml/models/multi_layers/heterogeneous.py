@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from ..model_tools import ModelMethods as CPModelMethods
 from .. import single_layers as cp_single_layers
-from ... import tensor as cp_tensor
+from ... import tensors as cp_tensors
 
 __all__ = ['SequentialMultiHeteroLayers']
 

@@ -5,15 +5,17 @@ import copy
 import math
 import numpy as np
 import torch
-from .... import clock as cp_clock
-from .... import strings as cp_strings
-from .... import txt as cp_txt
+from ..... import clock as cp_clock
+from ..... import strings as cp_strings
+from ..... import txt as cp_txt
+from ....tvt import utilities as cp_tvt_utilities
 
 
 def train(
-        model, environment, optimizer, I=10, E=None, T=None,
-        n_samples_per_training_chunk=100000, n_samples_per_validation=100000,
-        epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05, n_samples_per_epsilon_step=10000,
+        model, environments, optimizer,
+        I=10, E=None, T=None, # todo: to the model or loader
+        n_samples_per_epoch=100000, n_samples_per_validation=100000,  # todo: parameters should go to the loader
+        epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05, n_samples_per_epsilon_step=10000,  # todo: to the model
         directory_outputs=None):
 
     cp_timer = cp_clock.Timer()
@@ -23,7 +25,7 @@ def train(
     model.freeze()
     torch.set_grad_enabled(False)
 
-    for key_environment_k in environment.keys():
+    for key_environment_k in environments.keys():
         if key_environment_k == 'training' or key_environment_k == 'validation':
             pass
         else:
@@ -32,7 +34,7 @@ def train(
     headers = [
         'Start_Date', 'Start_Time' 'Duration', 'Elapsed_Time',
 
-        'Training_Chunk', 'Unsuccessful_Training_Chunks',
+        'Epoch', 'Unsuccessful_Epochs',
 
         'Training_Unscaled_Loss',
         'Validation_Unscaled_Loss',
@@ -76,94 +78,60 @@ def train(
         axis_time_features=model.axis_time_inputs, axis_time_actions=model.axis_time_losses,
         axis_models_actions=model.axis_models_losses)
 
-    lowest_unscaled_class_prediction_loss = math.inf
-    lowest_unscaled_class_prediction_loss_str = str(lowest_unscaled_class_prediction_loss)
+    lowest_unscaled_loss = math.inf
+    lowest_unscaled_loss_str = str(lowest_unscaled_loss)
 
-    lowest_scaled_class_prediction_loss = math.inf
-    lowest_scaled_class_prediction_loss_str = str(lowest_scaled_class_prediction_loss)
+    lowest_scaled_loss = math.inf
+    lowest_scaled_loss_str = str(lowest_scaled_loss)
 
-    highest_accuracy = -math.inf
-    highest_accuracy_str = str(highest_accuracy)
+    highest_reward = -math.inf
+    highest_reward_str = str(highest_reward)
 
-    if E is None:
-        E = math.inf
-
-    if I is None:
-        I = math.inf
-
-    if T is None:
-        T = math.inf
-
-    epsilon = epsilon_start
+    epsilon = epsilon_start  # todo to the model
     if epsilon < epsilon_end:
         epsilon = epsilon_end
 
     epsilon_validation = 0
 
-    i = 0
-    e = 0
+    epochs = cp_tvt_utilities.Epochs(I=I, E=E)
 
-    while (e < E) and (i < I):
+    for e, i in epochs:
 
         print('Epoch {e} ...'.format(e=e))
 
         stats['lines'].append(new_line_stats.copy())
         stats['lines'][e][stats['headers']['Epoch']] = e
 
-        # Each epoch has a training and a validation phase
+        # Each Training Epoch has a training and a validation phase
         # training phase
 
         running_unscaled_loss_e = 0.0
         running_scaled_loss_e = 0.0
 
-        running_n_selected_actions_e = 0
-        running_unscaled_value_action_loss_e = 0.0
-        running_scaled_value_action_loss_e = 0.0
-
-        running_n_corrects_e = 0
-        running_n_classifications_e = 0
-        running_unscaled_class_prediction_loss_e = 0.0
-        running_scaled_class_prediction_loss_e = 0.0
-
-        running_n_corrects_T_e = 0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
-        running_n_classifications_T_e = 0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
-        running_unscaled_class_prediction_losses_T_e = 0.0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
-        running_scaled_class_prediction_losses_T_e = 0.0  # type: int | float | list | tuple | np.ndarray | torch.Tensor
+        # running_n_selected_actions_e = 0  # todo
 
         b = 0
         # Iterate over data.
-        for environments_eb in environment['training']:
+        for environment_eb in environments['training']:
 
             replay_memory.clear()
 
-            hc_ebt = None, None
+            hc_ebit = None, None # todo
 
             t = 0
-            for state_ebt, labels_ebt in environments_eb:
+            for observations_ebit in environment_eb:
 
-                outs_ebt, hc_ebt = model(x=state_ebt, hc=hc_ebt)
+                state_ebit = observations_ebit, hc_ebit
 
-                values_actions_ebt, predictions_classes_ebt = model.split(outs_ebt)
+                outs_ebit, hc_ebit = model(x=state_ebit)
 
-                action_ebt = model.sample_action(values_actions=values_actions_ebt, epsilon=epsilon)
+                action_ebit = model.sample_action(values_actions=values_actions_ebit, epsilon=epsilon)
 
                 rewards_ebt = None
 
-                replay_memory.put(
-                    states=state_ebt, states_labels=labels_ebt, actions=action_ebt,
-                    next_states=None, rewards=rewards_ebt)
-
-                if t > 0:
-                    class_prediction_losses_ebt = model.compute_class_prediction_losses(
-                        predictions_classes=predictions_classes_ebt, labels=labels_ebt)
-
-                    replay_memory.rewards[t - 1] = model.get_previous_rewards(
-                        class_prediction_losses=class_prediction_losses_ebt)
+                replay_memory.put(state=state_ebt, action=action_ebt, next_state=None, reward=rewards_ebt)
 
                 delta_ebt = model.compute_deltas(action_ebt)
-
-                if delta_preprocessor is not None:
-                    delta_ebt = delta_preprocessor(delta_ebt)
 
                 environments_eb.step(delta_ebt)
 
@@ -717,15 +685,15 @@ class ReplayMemory:
         else:
             self.axis_time_rewards = self.axis_time_actions
 
-    def put(self, states=None, states_labels=None, actions=None, next_states=None, rewards=None):  # , non_final):
+    def put(self, state=None, action=None, next_state=None, reward=None):  # , non_final):
 
-        self.states.append(states)
-        self.states_labels.append(states_labels)
-        self.actions.append(actions)
+        self.states.append(state)
 
-        self.next_states.append(next_states)
+        self.actions.append(action)
 
-        self.rewards.append(rewards)
+        self.next_states.append(next_state)
+
+        self.rewards.append(reward)
 
         # if non_final is not None:
         # self.non_final.append(non_final)
