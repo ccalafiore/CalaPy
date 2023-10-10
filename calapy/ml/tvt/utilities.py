@@ -4,14 +4,14 @@ import math
 
 class Epochs:
 
-    def __init__(self, I, E):
+    def __init__(self, U=10, E=None):
 
-        if I is None:
-            self.I = math.inf
-        elif isinstance(I, int):
-            self.I = I
+        if U is None:
+            self.U = math.inf
+        elif isinstance(U, int):
+            self.U = U
         else:
-            raise TypeError('I')
+            raise TypeError('U')
 
         if E is None:
             self.E = math.inf
@@ -20,12 +20,13 @@ class Epochs:
         else:
             raise TypeError('E')
 
-        self.i = 0
+        self.u = 0
         self.e = 0
+        self.are_unsuccessful_epochs_counted = False
 
     def __iter__(self):
         self.e = -1
-        self.i = 0
+        self.u = 0
         self.are_unsuccessful_epochs_counted = True
         return self
 
@@ -34,9 +35,9 @@ class Epochs:
         if self.are_unsuccessful_epochs_counted:
             self.e += 1
 
-            if (self.e < self.E) and (self.i < self.I):
+            if (self.e < self.E) and (self.u < self.U):
                 self.are_unsuccessful_epochs_counted = False
-                return self.e, self.i
+                return self.e, self.u
             else:
                 raise StopIteration
         else:
@@ -49,10 +50,10 @@ class Epochs:
             raise EnvironmentError(
                 'epochs.count_unsuccessful_epochs() needs to be called only one time at end of each epoch')
         else:
-            self.are_unsuccessful_epochs_counted = True
             if is_successful_epoch:
-                self.i = 0
+                self.u = 0
             else:
-                self.i += 1
+                self.u += 1
+            self.are_unsuccessful_epochs_counted = True
 
-        return self.i
+        return self.u

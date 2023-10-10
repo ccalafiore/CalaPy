@@ -13,8 +13,7 @@ from ....tvt import utilities as cp_tvt_utilities
 
 def train(
         model, environments, optimizer,
-        I=10, E=None, T=None, # todo: to the model or loader
-        n_samples_per_epoch=100000, n_samples_per_validation=100000,  # todo: parameters should go to the loader
+        I=10, E=None,
         epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05, n_samples_per_epsilon_step=10000,  # todo: to the model
         directory_outputs=None):
 
@@ -116,7 +115,7 @@ def train(
 
             replay_memory.clear()
 
-            hc_ebit = None, None # todo
+            hc_ebit = None, None  # todo
 
             t = 0
             for observations_ebit in environment_eb:
@@ -647,11 +646,9 @@ def train(
 
         print(dashes)
 
-        e += 1
-
     print()
 
-    E = e
+    n_completed_epochs = e + 1
 
     time_training = cp_timer.get_delta_time_total()
 
