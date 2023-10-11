@@ -1,6 +1,6 @@
 
 
-from ... import torch
+import torch
 from .... import maths as cp_maths
 import numpy as np
 import typing

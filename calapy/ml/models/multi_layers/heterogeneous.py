@@ -58,7 +58,7 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         self.accepted_layer_types_with_trainable_params = tuple(
             ['fc', 'rnn', 'lstm', 'gru', 'conv1d',  'conv2d', 'conv3d'])
         self.accepted_layer_types_without_trainable_params = tuple(
-            ['noise', 'dropout', 'sigmoid', 'tanh', 'relu', 'flatten'])
+            ['noise', 'addition', 'dropout', 'sigmoid', 'tanh', 'relu', 'flatten'])
         self.all_accepted_layer_types = (
                 self.accepted_layer_types_with_trainable_params + self.accepted_layer_types_without_trainable_params)
 
@@ -115,7 +115,9 @@ class SequentialMultiHeteroLayers(CPModelMethods):
                 layer_l = cp_single_layers.Conv3d(
                     **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
             elif self.params_of_layers[l]['type_name'] == 'noise':
-                layer_l = cp_single_layers.NoiseLayer(**self.params_of_layers[l]['params'])
+                layer_l = cp_single_layers.Noise(**self.params_of_layers[l]['params'])
+            elif self.params_of_layers[l]['type_name'] == 'addition':
+                layer_l = cp_single_layers.Addition(**self.params_of_layers[l]['params'])
             elif self.params_of_layers[l]['type_name'] == 'dropout':
                 layer_l = torch.nn.Dropout(**self.params_of_layers[l]['params'])
             elif self.params_of_layers[l]['type_name'] == 'sigmoid':

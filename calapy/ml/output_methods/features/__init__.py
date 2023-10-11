@@ -1,8 +1,11 @@
 
 
-from .... import initiate as cp_initiate
+import importlib
 
+submodules = ['general', 'classifiers', 'DQNs', 'DQCs']
 
-__all__ = ['general', 'classifiers', 'DQNs', 'DQCs']
+others = []
+__all__ = submodules + others
 
-cp_initiate(__all__)
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

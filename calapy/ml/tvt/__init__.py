@@ -1,7 +1,12 @@
 
 
-from ... import initiate as cp_initiate
+import importlib
 
-__all__ = ['rl']
 
-cp_initiate(names_submodules=__all__)
+submodules = ['rl', 'utilities']
+
+others = []
+__all__ = submodules + others
+
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

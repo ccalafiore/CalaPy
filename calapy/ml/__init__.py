@@ -1,8 +1,10 @@
 
-
-from .. import initiate as cp_initiate
-
-__all__ = ['datasets', 'models', 'output_methods', 'devices', 'preprocess', 'tensors', 'test', 'train', 'tvt']
+import importlib
 
 
-cp_initiate(names_submodules=__all__)
+submodules = ['datasets', 'models', 'output_methods', 'devices', 'preprocess', 'tensors', 'test', 'train', 'tvt']
+others = []
+__all__ = submodules + others
+
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

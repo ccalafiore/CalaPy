@@ -6,8 +6,8 @@
 # https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
 
 
-from .. import torch
-from .. import torchvision
+import torch
+import torchvision
 import PIL
 import numpy as np
 import math

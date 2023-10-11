@@ -1,4 +1,4 @@
-from . import torch
+import torch
 import typing
 
 __all__ = ['define_device', 'set_device']

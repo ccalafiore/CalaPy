@@ -1,8 +1,12 @@
 
 
-from ..... import initiate as cp_initiate
-
-__all__ = ['same_time_sizes', 'different_time_sizes']
+import importlib
 
 
-cp_initiate(names_submodules=__all__)
+submodules = ['same_time_sizes', 'different_time_sizes']
+
+others = []
+__all__ = submodules + others
+
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

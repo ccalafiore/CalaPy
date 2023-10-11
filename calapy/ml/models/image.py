@@ -5,14 +5,12 @@
 # https://discuss.pytorch.org/t/normalize-each-input-image-in-a-batch-independently-and-inverse-normalize-the-output/23739
 # https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
 
+import torch
+import torchvision
 
 if __name__ == "__main__":
-    import torch
-    import torchvision
     from calapy.ml import devices as cp_device
 else:
-    from .. import torch
-    from .. import torchvision
     from ...ml import devices as cp_device
 
 

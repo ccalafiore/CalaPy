@@ -9,26 +9,39 @@ from ..... import clock as cp_clock
 from ..... import strings as cp_strings
 from ..... import txt as cp_txt
 from ....tvt import utilities as cp_tvt_utilities
+from ...rl import utilities as cp_rl_utilities
 
 
 def train(
-        model, environments, optimizer,
-        I=10, E=None,
+        model, environment, optimizer, U=10, E=None,
+        tot_observations_per_epoch=None,
         epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05, n_samples_per_epsilon_step=10000,  # todo: to the model
         directory_outputs=None):
 
     cp_timer = cp_clock.Timer()
 
+    phases_names = ('training', 'validation')
+    for key_environment_k in environment.keys():
+        if key_environment_k in phases_names:
+            pass
+        else:
+            raise ValueError('Unknown keys in environment')
+
+    if tot_observations_per_epoch is None:
+        tot_observations_per_epoch = {'training': 10000, 'validation': 10000}
+    elif isinstance(tot_observations_per_epoch, dict):
+        for key_k in tot_observations_per_epoch.keys():
+            if key_k in phases_names:
+                pass
+            else:
+                raise ValueError('Unknown keys in tot_observations_per_epoch')
+    else:
+        raise TypeError('tot_observations_per_epoch')
+
     if model.training:
         model.eval()
     model.freeze()
     torch.set_grad_enabled(False)
-
-    for key_environment_k in environments.keys():
-        if key_environment_k == 'training' or key_environment_k == 'validation':
-            pass
-        else:
-            raise ValueError('Unknown keys in environment')
 
     headers = [
         'Start_Date', 'Start_Time' 'Duration', 'Elapsed_Time',
@@ -73,9 +86,7 @@ def train(
     dashes = '-' * n_dashes
     print(dashes)
 
-    replay_memory = ReplayMemory(
-        axis_time_features=model.axis_time_inputs, axis_time_actions=model.axis_time_losses,
-        axis_models_actions=model.axis_models_losses)
+    replay_memory = ReplayMemory()
 
     lowest_unscaled_loss = math.inf
     lowest_unscaled_loss_str = str(lowest_unscaled_loss)
@@ -92,9 +103,9 @@ def train(
 
     epsilon_validation = 0
 
-    epochs = cp_tvt_utilities.Epochs(I=I, E=E)
+    epochs = cp_tvt_utilities.Epochs(U=U, E=E)
 
-    for e, i in epochs:
+    for e, u in epochs:
 
         print('Epoch {e} ...'.format(e=e))
 
@@ -109,11 +120,14 @@ def train(
 
         # running_n_selected_actions_e = 0  # todo
 
-        b = 0
-        # Iterate over data.
-        for environment_eb in environments['training']:
+        env_iterator = cp_rl_utilities.EnvironmentsIterator(
+            tot_observations_per_epoch=tot_observations_per_epoch['training'])
 
-            replay_memory.clear()
+
+
+        for environment_eb in env_iterator:
+
+
 
             hc_ebit = None, None  # todo
 
@@ -262,7 +276,8 @@ def train(
             running_scaled_class_prediction_losses_T_e += (
                         scaled_class_prediction_losses_T_eb * n_classifications_T_eb)
 
-            b += 1
+
+        replay_memory.clear()
 
         # scheduler.step()
 
@@ -505,6 +520,8 @@ def train(
 
             b += 1
 
+        replay_memory.clear()
+
         running_n_actions_and_classifications_e = running_n_selected_actions_e + running_n_classifications_e
         unscaled_loss_e = running_unscaled_loss_e / running_n_actions_and_classifications_e
         scaled_loss_e = running_scaled_loss_e / running_n_actions_and_classifications_e
@@ -666,44 +683,25 @@ def train(
 class ReplayMemory:
     """A simple replay buffer."""
 
-    def __init__(self, axis_time_features: int, axis_time_actions: int, axis_models_actions: int):
+    def __init__(self):
 
         self.states = []
-        self.states_labels = []
         self.actions = []
-        self.next_states = []
         self.rewards = []
-        # self.non_final = []
+        self.next_states = []
 
-        self.axis_time_features = axis_time_features
-        self.axis_time_actions = axis_time_actions
-        if axis_models_actions < self.axis_time_actions:
-            self.axis_time_rewards = self.axis_time_actions - 1
-        else:
-            self.axis_time_rewards = self.axis_time_actions
-
-    def put(self, state=None, action=None, next_state=None, reward=None):  # , non_final):
+    def append(self, state=None, action=None, reward=None, next_state=None):
 
         self.states.append(state)
 
         self.actions.append(action)
 
-        self.next_states.append(next_state)
-
         self.rewards.append(reward)
 
-        # if non_final is not None:
-        # self.non_final.append(non_final)
+        self.next_states.append(next_state)
 
     def clear(self):
-
-        self.states = []
-        self.states_labels = []
-        self.actions = []
-        self.next_states = []
-        self.rewards = []
-        # self.non_final = []
-
+        self.__init__()
         return None
 
     def sample(self):

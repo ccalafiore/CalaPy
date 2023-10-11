@@ -1,8 +1,11 @@
 
 
-from ... import initiate as cp_initiate
+import importlib
 
+submodules = ['features']
 
-__all__ = ['features']
+others = []
+__all__ = submodules + others
 
-cp_initiate(__all__)
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

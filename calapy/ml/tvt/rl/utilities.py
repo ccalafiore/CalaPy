@@ -3,57 +3,49 @@
 import math
 
 
-class EpochPhase:
+__all__ = ['EnvironmentsIterator', 'ObservationsIterator']
 
-    def __init__(self, n_environments_per_epoch, n_environments_per_batch, T=None):
 
-        if isinstance(n_environments_per_epoch, int):
-            self.n_environments_per_epoch = n_environments_per_epoch
+class EnvironmentsIterator:
+
+    def __init__(self, tot_observations_per_epoch):
+
+        """
+
+        :type tot_observations_per_epoch: int
+        """
+
+        if isinstance(tot_observations_per_epoch, int):
+            self.tot_observations_per_epoch = tot_observations_per_epoch
         else:
-            raise TypeError('n_environments_per_epoch')
-
-        if isinstance(n_environments_per_batch, int):
-            self.n_environments_per_batch = n_environments_per_batch
-        else:
-            raise TypeError('n_environments_per_batch')
-
-        if T is None:
-            self.T = math.inf
-        elif isinstance(T, int):
-            self.T = T
-        else:
-            raise TypeError('T')
-
-        self.s = 0
-        self.b = 0
+            raise TypeError('tot_observations_per_epoch')
 
     def __iter__(self):
         self.s = 0
-        self.b = -1
         return self
 
     def __next__(self):
 
-        self.s += self.n_environments_per_batch
-        self.b += 1
-
-        if self.s < self.n_environments_per_epoch:
-
-            batch_i = Batch(n_environments_per_batch=self.n_environments_per_batch, T=self.T)
-
-            return self.b, self.s, batch_i
+        if self.s < self.tot_observations_per_epoch:
+            return self.s
         else:
             raise StopIteration
 
+    def __add__(self, n_new_observations):
+        self.s += n_new_observations
+        return self.s
 
-class Batch:
+    def count_observations(self, n_new_observations):
+        return self + n_new_observations
 
-    def __init__(self, n_environments_per_batch, T=None):
 
-        if isinstance(n_environments_per_batch, int):
-            self.n_environments_per_batch = n_environments_per_batch
-        else:
-            raise TypeError('n_environments_per_batch')
+class ObservationsIterator:
+
+    def __init__(self, T=None):
+
+        """
+        :type T: int | None
+        """
 
         if T is None:
             self.T = math.inf
@@ -61,53 +53,17 @@ class Batch:
             self.T = T
         else:
             raise TypeError('T')
-
-        self.i = 0
-
-    def __iter__(self):
-        self.i = -1
-        return self
-
-    def __next__(self):
-
-        self.i += 1
-
-        if self.i < self.n_environments_per_batch:
-            environment_i = Environment(T=self.T)
-
-            return self.i, environment_i
-        else:
-            raise StopIteration
-
-
-class Environment:
-
-    def __init__(self, get_observation, T=None):
-
-        self.get_observation = get_observation
-
-        if T is None:
-            self.T = math.inf
-        elif isinstance(T, int):
-            self.T = T
-        else:
-            raise TypeError('T')
-
-        self.t = 0
 
     def __iter__(self):
         self.t = -1
+        self.not_over = True
         return self
 
     def __next__(self):
 
         self.t += 1
 
-        if self.t < self.T:
-
-            # todo: observation function
-            observation_t = self.get_observation()
-
+        if self.not_over or (self.t < self.T):
             return self.t
         else:
             raise StopIteration

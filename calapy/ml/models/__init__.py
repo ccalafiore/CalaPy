@@ -1,6 +1,10 @@
 
-from ... import initiate as cp_initiate
+import importlib
 
-__all__ = ['features', 'image', 'model_tools', 'single_layers', 'multi_layers']
 
-cp_initiate(names_submodules=__all__)
+submodules = ['features', 'image', 'model_tools', 'single_layers', 'multi_layers']
+others = []
+__all__ = submodules + others
+
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

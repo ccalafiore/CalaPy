@@ -2,9 +2,15 @@
 import math
 
 
-class Epochs:
+class EpochsIterator:
 
     def __init__(self, U=10, E=None):
+
+        """
+
+        :type U: int | None
+        :type E: int | None
+        """
 
         if U is None:
             self.U = math.inf
@@ -45,6 +51,11 @@ class Epochs:
                 'epochs.count_unsuccessful_epochs() needs to be called one time at end of each epoch')
 
     def count_unsuccessful_epochs(self, is_successful_epoch):
+
+        """
+
+        :type is_successful_epoch: bool
+        """
 
         if self.are_unsuccessful_epochs_counted:
             raise EnvironmentError(

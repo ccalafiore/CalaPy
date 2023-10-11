@@ -1,6 +1,6 @@
 
 
-from ... import torch
+import torch
 from .classifiers import *
 from .DQNs import *
 from .general import *

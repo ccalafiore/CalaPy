@@ -6,7 +6,7 @@
 # https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
 
 
-from . import torch
+import torch
 import numpy as np
 import typing
 import math
