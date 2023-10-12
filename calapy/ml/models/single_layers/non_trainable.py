@@ -58,12 +58,12 @@ class Noise(CPModelMethods):
 
 class Addition(CPModelMethods):
 
-    def __init__(self, axes=0, keepdim=False):
+    def __init__(self, axes, keepdim=False):
         """
 
-        :param axes: the sigma of the noise to be added to each batch input "x" is defined as the sigma of "x"
-            multiplied by the "scale"
+        :param axes: The axes over which to perform the sum
         :type axes: int | list | tuple | torch.Tensor | np.ndarray
+        :type keepdim: bool
         """
         superclass = Addition
         try:
@@ -108,3 +108,45 @@ class Addition(CPModelMethods):
         """
 
         return torch.sum(input=x, dim=self.axes, keepdim=self.keepdim)
+
+
+class Concatenation(CPModelMethods):
+
+    def __init__(self, axis):
+        """
+
+        :param axis: the axis over which to concatenate
+        :type axis: int
+        """
+        superclass = Concatenation
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
+            self.superclasses_initiated = []
+
+        if CPModelMethods not in self.superclasses_initiated:
+            CPModelMethods.__init__(self=self)
+            if CPModelMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(CPModelMethods)
+
+        if isinstance(axis, int):
+            self.axis = axis
+        else:
+            raise TypeError('axis')
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
+
+    def forward(self, xs):
+        """
+
+        :param x: The input data.
+        :type x: torch.Tensor | np.ndarray
+        :return: The output data.
+        :rtype: torch.Tensor
+        """
+
+        return torch.concatenate(tensors=xs, dim=self.axis, out=None)
