@@ -5,7 +5,7 @@ import torch
 from ..model_tools import ModelMethods as CPModelMethods
 from ... import tensors as cp_tensors
 
-__all__ = ['Noise', 'Addition']
+__all__ = ['Noise', 'Addition', 'Concatenation']
 
 
 class Noise(CPModelMethods):
@@ -143,8 +143,8 @@ class Concatenation(CPModelMethods):
     def forward(self, xs):
         """
 
-        :param x: The input data.
-        :type x: torch.Tensor | np.ndarray
+        :param xs: The input data.
+        :type xs: list[torch.Tensor | np.ndarray]
         :return: The output data.
         :rtype: torch.Tensor
         """

@@ -1,15 +1,17 @@
 
 
+import typing
 import numpy as np
 import torch
-from ..model_tools import ModelMethods as CPModelMethods
+from .homogeneous import SequentialFCLs, ParallelFCLs, SequentialLSTMs
+from ..model_tools import ModelMethods as cp_ModelMethods
 from .. import single_layers as cp_single_layers
-from ... import tensors as cp_tensors
+# from ... import tensors as cp_tensors
 
-__all__ = ['SequentialMultiHeteroLayers']
+__all__ = ['SequentialHeteroLayers']
 
 
-class SequentialMultiHeteroLayers(CPModelMethods):
+class SequentialHeteroLayers(cp_ModelMethods):
 
     """The class of basic neural networks (NNs)
 
@@ -26,7 +28,7 @@ class SequentialMultiHeteroLayers(CPModelMethods):
 
         """
 
-        superclass = SequentialMultiHeteroLayers
+        superclass = SequentialHeteroLayers
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -35,10 +37,10 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         except NameError:
             self.superclasses_initiated = []
 
-        if CPModelMethods not in self.superclasses_initiated:
-            CPModelMethods.__init__(self=self)
-            if CPModelMethods not in self.superclasses_initiated:
-                self.superclasses_initiated.append(CPModelMethods)
+        if cp_ModelMethods not in self.superclasses_initiated:
+            cp_ModelMethods.__init__(self=self)
+            if cp_ModelMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(cp_ModelMethods)
 
         if isinstance(params_of_layers, (list, tuple, np.ndarray)):
             if isinstance(params_of_layers, list):
@@ -58,7 +60,7 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         self.accepted_layer_types_with_trainable_params = tuple(
             ['fc', 'rnn', 'lstm', 'gru', 'conv1d',  'conv2d', 'conv3d'])
         self.accepted_layer_types_without_trainable_params = tuple(
-            ['noise', 'addition', 'dropout', 'sigmoid', 'tanh', 'relu', 'flatten'])
+            ['noise', 'addition', 'concatenation', 'dropout', 'sigmoid', 'tanh', 'relu', 'flatten'])
         self.all_accepted_layer_types = (
                 self.accepted_layer_types_with_trainable_params + self.accepted_layer_types_without_trainable_params)
 
@@ -118,6 +120,8 @@ class SequentialMultiHeteroLayers(CPModelMethods):
                 layer_l = cp_single_layers.Noise(**self.params_of_layers[l]['params'])
             elif self.params_of_layers[l]['type_name'] == 'addition':
                 layer_l = cp_single_layers.Addition(**self.params_of_layers[l]['params'])
+            elif self.params_of_layers[l]['type_name'] == 'concatenation':
+                layer_l = cp_single_layers.Concatenation(**self.params_of_layers[l]['params'])
             elif self.params_of_layers[l]['type_name'] == 'dropout':
                 layer_l = torch.nn.Dropout(**self.params_of_layers[l]['params'])
             elif self.params_of_layers[l]['type_name'] == 'sigmoid':
@@ -259,3 +263,77 @@ class SequentialMultiHeteroLayers(CPModelMethods):
         batch_shape = input_shape_f[batch_axes_f].tolist()
 
         return batch_shape
+
+
+class SequentialLSTMsSequentialFCLsParallelFCLs(cp_ModelMethods):
+
+
+    def __init__(
+            self, n_features_inputs_lstm: int, n_features_outs_lstm: int,
+            n_features_non_parallel_fc_layers: typing.Union[int, list, tuple, np.ndarray, torch.Tensor],
+            n_features_parallel_fc_layers: typing.Union[int, list, tuple, np.ndarray, torch.Tensor],
+            bias_lstm: typing.Union[bool, int] = True,
+            biases_non_parallel_layers: typing.Union[bool, int, list, tuple, np.ndarray, torch.Tensor] = True,
+            biases_parallel_fc_layers: typing.Union[bool, int, list, tuple, np.ndarray, torch.Tensor] = True,
+            n_layers_lstm: int = 1, dropout_lstm: typing.Union[int, float] = 0, bidirectional_lstm: bool = False,
+            batch_first: bool = True, return_hc: bool = True,
+            device: typing.Union[torch.device, str, None] = None) -> None:
+
+        superclass = SequentialLSTMsSequentialFCLsParallelFCLs
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
+            self.superclasses_initiated = []
+
+        if cp_ModelMethods not in self.superclasses_initiated:
+            cp_ModelMethods.__init__(self=self)
+            if cp_ModelMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(cp_ModelMethods)
+
+        # todo: homogeneous.SequentialLSTMs
+        self.lstm = SequentialLSTMs(
+            n_features_inputs=n_features_inputs_lstm, n_features_outs=n_features_outs_lstm,
+            n_layers=n_layers_lstm, bias=bias_lstm,
+            dropout=dropout_lstm, bidirectional=bidirectional_lstm,
+            batch_first=batch_first, return_hc=return_hc,
+            device=self.device)
+
+        self.non_parallel_fc_layers = SequentialFCLs(
+            n_features_layers=n_features_non_parallel_fc_layers,
+            biases_layers=biases_non_parallel_layers,
+            device=self.device)
+
+        if self.lstm.n_features_all_outs != self.non_parallel_fc_layers.n_features_layers[0]:
+            raise ValueError('n_features_outs_lstm, n_features_non_parallel_fc_layers[0]')
+
+        self.parallel_fc_layers = ParallelFCLs(
+            n_features_layers=n_features_parallel_fc_layers,
+            biases_layers=biases_parallel_fc_layers, device=self.device)
+
+        if self.non_parallel_fc_layers.n_features_layers[-1] != self.parallel_fc_layers.n_features_first_layers_together:
+            raise ValueError('n_features_non_parallel_fc_layers[-1], n_features_parallel_fc_layers[0]')
+
+        self.M = self.parallel_fc_layers.M
+
+        self.return_hc = self.lstm.return_hc
+
+        self.set_device()
+        self.get_dtype()
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
+
+    def forward(self, x: torch.Tensor, hc: typing.Union[tuple, list, None] = None):
+        if self.return_hc:
+            x, hc = self.lstm(x, hc)
+            x = self.non_parallel_fc_layers(x)
+            x = self.parallel_fc_layers(x)
+            return x, hc
+        else:
+            x = self.lstm(x, hc)
+            x = self.non_parallel_fc_layers(x)
+            x = self.parallel_fc_layers(x)
+            return x

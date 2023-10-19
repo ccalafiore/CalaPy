@@ -1,13 +1,16 @@
 
 
-from .homogeneous import *
-from .heterogeneous import *
-
+from .fcn import *
+from .gru import *
 
 __all__ = [
     'SequentialFCLs', 'ParallelFCLs', 'SequentialFCLsParallelFCLs',
     'SequentialGRUs', 'ParallelGRUs', 'SequentialGRUsParallelGRUs',
     'SequentialLSTMs',
-
-    'SequentialHeteroLayers',
 ]
+
+
+class SequentialLSTMs:
+
+    def __init__(self):
+        raise NotImplementedError()
