@@ -158,6 +158,7 @@ class SequentialHeteroLayers(cp_ModelMethods):
 
         """
 
+        :param x: A batch of the input data.
         :type x: torch.Tensor | np.ndarray
         """
 
@@ -169,7 +170,7 @@ class SequentialHeteroLayers(cp_ModelMethods):
     def _forward_with_recurrent_layers(self, x, h=None):
 
         """
-
+        :param x: A batch of the input data.
         :type x: torch.Tensor | np.ndarray
         :type h: list[list[np.ndarray | torch.Tensor | None] | tuple[np.ndarray | torch.Tensor | None] | np.ndarray | torch.Tensor | None] | None
         :rtype: tuple[torch.Tensor, list[torch.Tensor | tuple[torch.Tensor, torch.Tensor]]]
