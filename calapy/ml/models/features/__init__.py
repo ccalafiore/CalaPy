@@ -3,7 +3,7 @@
 import importlib
 
 
-submodules = ['no_task', 'DQCs']
+submodules = ['DQCs']
 others = []
 __all__ = submodules + others
 
