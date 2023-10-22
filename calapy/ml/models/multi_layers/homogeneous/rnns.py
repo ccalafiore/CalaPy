@@ -3,25 +3,30 @@
 import numpy as np
 import torch
 from ...model_tools import ModelMethods as cp_ModelMethods
-from ._base import *
+from ... import single_layers as cp_single_layers
+from ._fcn_base import *
 # from ..... import combinations as cp_combinations
 
 
-__all__ = ['FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers']
+__all__ = ['RNN', 'IndRNNs', 'RNNsWithSharedShallowerLayers']
 
 # todo: add non-trainable layers
 
 
-class FCNN(_NN):
+class RNN(_NN):
 
-    """A Class of neural networks (NN) with only fully-connected (FC) layers.
-
+    """A Base Class for recurrent neural networks (RNN) with homogeneous recurrent layers.
 
     """
 
-    def __init__(self, n_features_layers, biases_layers=True, device=None, dtype=None):
+    def __init__(
+            self, type_name, n_features_layers, biases_layers=True, axis_time=None, h_sigma=0.1,
+            nonlinearity='tanh', device=None, dtype=None):
 
         """
+
+        :param type_name: The name of the type of recurrent layers. The accepted names are "rnn", "lstm" and "gru".
+        :type type_name: str
 
         :param n_features_layers: A sequence of ints whose first element is the input size of the NN and all other
             elements from the second to the last are the output sizes of all layers. The NN will have L layers, where
@@ -43,7 +48,7 @@ class FCNN(_NN):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = FCNN
+        superclass = RNN
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -57,36 +62,151 @@ class FCNN(_NN):
             if _NN not in self.superclasses_initiated:
                 self.superclasses_initiated.append(_NN)
 
-        self.layers = torch.nn.Sequential(*[torch.nn.Linear(
-            in_features=self.n_input_features_layers[l], out_features=self.n_output_features_layers[l],
-            bias=self.biases_layers[l], device=device, dtype=dtype) for l in range(0, self.L, 1)])
+        self.accepted_type_names_with_h = tuple(['rnn', 'gru'])
+        self.accepted_type_names_with_hc = tuple(['lstm'])
+        self.accepted_type_names = self.accepted_type_names_with_h + self.accepted_type_names_with_hc
 
-        self.set_device()
-        self.get_dtype()
+        if isinstance(type_name, str):
+            type_name_f = type_name.lower()
+            if type_name_f in self.accepted_type_names:
+                self.type_name = type_name_f
+            else:
+                raise ValueError('type_name')
+        else:
+            raise TypeError('type_name')
+
+        if self.type_name == 'rnn':
+
+            self.layers = torch.nn.ModuleList([cp_single_layers.RNN(
+                input_size=self.n_input_features_layers[l], hidden_size=self.n_output_features_layers[l],
+                bias=self.biases_layers[l], nonlinearity=nonlinearity, axis_time=axis_time, h_sigma=h_sigma,
+                device=device, dtype=dtype) for l in range(0, self.L, 1)])
+
+        elif self.type_name == 'lstm':
+
+            self.layers = torch.nn.ModuleList([cp_single_layers.LSTM(
+                input_size=self.n_input_features_layers[l], hidden_size=self.n_output_features_layers[l],
+                bias=self.biases_layers[l], axis_time=axis_time, h_sigma=h_sigma, device=device, dtype=dtype)
+                for l in range(0, self.L, 1)])
+
+        elif self.type_name == 'gru':
+
+            self.layers = torch.nn.ModuleList([cp_single_layers.GRU(
+                input_size=self.n_input_features_layers[l], hidden_size=self.n_output_features_layers[l],
+                bias=self.biases_layers[l], axis_time=axis_time, h_sigma=h_sigma, device=device, dtype=dtype)
+                for l in range(0, self.L, 1)])
+        else:
+            raise ValueError('type_name')
+
+        self.axis_time, self.is_timed = self.layers[0].axis_time, self.layers[0].is_timed
+
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x):
+    def forward(self, x, h=None):
 
         """
-
         :param x: A batch of the input data.
-        :type x: torch.Tensor | np.ndarray
-        :rtype: torch.Tensor
+        :type x: torch.Tensor
+        :type h: list[np.ndarray | torch.Tensor | None] | None
+        :rtype: tuple[torch.Tensor, list[torch.Tensor]]
+
         """
 
-        return self.layers(x)
+        if h is None:
+            h = [None for l in range(0, self.L, 1)]  # type: list
+
+        for l in range(0, self.L, 1):
+
+            if h[l] is None:
+                batch_shape = self.get_batch_shape(input_shape=x.shape)
+                h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=None)
+
+            x, h[l] = self.layers[l](x, h[l])
+
+        return x, h
+
+    def init_h(self, batch_shape, generators=None):
+
+        """
+
+        :param batch_shape: The shape of the batch input data without the time and the feature dimensions.
+        :type batch_shape: int | list | tuple | torch.Size | torch.Tensor | np.ndarray
+        :param generators: The instances of the torch generator to generate the tensors h with random values from a
+            normal distribution.
+        :type generators: list | tuple | torch.Generator | None
+
+        :rtype: list[torch.Tensor | list[torch.Tensor]]
+
+        """
+
+        if generators is None:
+            generators = [None for l in range(0, self.L, 1)]  # type: list
+        elif isinstance(generators, torch.Generator):
+            generators = [generators for l in range(0, self.L, 1)]  # type: list
+        elif isinstance(generators, (list, tuple)):
+            len_gens = len(generators)
+            if len_gens != self.L:
+                if len_gens == 0:
+                    generators = [None for l in range(0, self.L, 1)]  # type: list
+                elif len_gens == 1:
+                    generators = [generators[0] for l in range(0, self.L, 1)]  # type: list
+                else:
+                    raise ValueError('len(generators)')
+        else:
+            raise TypeError('generators')
+
+        h = [None for l in range(0, self.L, 1)]  # type: list
+
+        for l in range(0, self.L, 1):
+
+            h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=generators[l])
+
+        return h
+
+    def get_batch_shape(self, input_shape):
+
+        """
+
+        :param input_shape: The input shape.
+        :type input_shape: int | list | tuple | torch.Tensor | np.ndarray
+        :return: The batch shape given the input shape "input_shape" and the recurrent model.
+        :rtype: list[int]
+        """
+
+        return self.layers[0].get_batch_shape(input_shape=input_shape)
+
+    def set_axis_time(self, axis_time):
+
+        """
+
+        :type axis_time: int | None
+        """
+
+        for l in range(0, self.L, 1):
+
+            self.layers[l].set_axis_time(axis_time=axis_time)
+
+        self.axis_time = self.layers[0].axis_time
+        self.is_timed = self.layers[0].is_timed
+
+        return self.axis_time, self.is_timed
 
 
-class IndFCNNs(_IndNNs):
+class IndRNNs(_IndNNs):
 
-    """A Class of multiple independent neural networks (NN) with only fully-connected (FC) layers.
+    """A Class of multiple independent recurrent neural networks (RNN) with homogeneous recurrent layers.
 
 
     """
 
-    def __init__(self, n_features_layers, biases_layers=True, axis_features=None, device=None, dtype=None):
+    def __init__(
+            self, type_name, n_features_layers, biases_layers=True, axis_features=None, axis_time=None, h_sigma=0.1,
+            nonlinearity='tanh', device=None, dtype=None):
 
         """
 
@@ -116,7 +236,7 @@ class IndFCNNs(_IndNNs):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = IndFCNNs
+        superclass = IndRNNs
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -132,28 +252,38 @@ class IndFCNNs(_IndNNs):
             if _IndNNs not in self.superclasses_initiated:
                 self.superclasses_initiated.append(_IndNNs)
 
-        self.layers = torch.nn.ModuleList([FCNN(
-            n_features_layers=self.n_features_layers[m], biases_layers=self.biases_layers[m], device=device,
-            dtype=dtype) for m in range(0, self.M, 1)])
+        self.accepted_type_names_with_h = tuple(['rnn', 'gru'])
+        self.accepted_type_names_with_hc = tuple(['lstm'])
+        self.accepted_type_names = self.accepted_type_names_with_h + self.accepted_type_names_with_hc
 
-        # self.layers = torch.nn.ModuleList([torch.nn.Sequential(
-        #     *[torch.nn.Linear(
-        #         in_features=self.n_input_features_layers[m][l], out_features=self.n_output_features_layers[m][l],
-        #         bias=self.biases_layers[m][l], device=device, dtype=dtype)
-        #         for l in range(1, self.L[m], 1)]) for m in range(0, self.M, 1)])
+        if isinstance(type_name, str):
+            type_name_f = type_name.lower()
+            if type_name_f in self.accepted_type_names:
+                self.type_name = type_name_f
+            else:
+                raise ValueError('type_name')
+        else:
+            raise TypeError('type_name')
 
-        self.set_device()
-        self.get_dtype()
+        self.layers = torch.nn.ModuleList([RNN(
+            type_name=self.type_name, n_features_layers=self.n_features_layers[m], biases_layers=self.biases_layers[m],
+            axis_time=axis_time, h_sigma=h_sigma, nonlinearity=nonlinearity, device=device, dtype=dtype)
+            for m in range(0, self.M, 1)])
+
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x):
+    def forward(self, x, h):
 
         """
 
         :type x: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]
-        :rtype: list[torch.Tensor]
+        :type h: list[torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]]
+        :rtype: list[list[torch.Tensor, list[torch.Tensor]]]
         """
 
         if isinstance(x, torch.Tensor):
@@ -163,10 +293,17 @@ class IndFCNNs(_IndNNs):
         else:
             raise TypeError('type(x) = {}'.format(type(x)))
 
-        return [self.layers[m](x[m]) for m in range(0, self.M, 1)]
+        if isinstance(h, torch.Tensor):
+            h = h.split(self.n_features_first_layers, dim=self.axis_features)
+        elif isinstance(h, (list, tuple)):
+            pass
+        else:
+            raise TypeError('type(h) = {}'.format(type(h)))
+
+        return [self.layers[m](x[m], h[m]) for m in range(0, self.M, 1)]
 
 
-class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
+class RNNsWithSharedShallowerLayers(cp_ModelMethods):
 
     def __init__(
             self, n_features_shared_layers, n_features_private_layers,
@@ -222,7 +359,7 @@ class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = FCNNsWithSharedShallowerLayers
+        superclass = RNNsWithSharedShallowerLayers
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -236,11 +373,11 @@ class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
-        self.shared_layers = FCNN(
+        self.shared_layers = RNN(
             n_features_layers=n_features_shared_layers,
             biases_layers=biases_shared_layers, device=device, dtype=dtype)
 
-        self.private_layers = IndFCNNs(
+        self.private_layers = IndRNNs(
             n_features_layers=n_features_private_layers,
             biases_layers=biases_private_layers, axis_features=axis_features, device=device, dtype=dtype)
 
@@ -249,18 +386,20 @@ class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
 
         self.M = self.parallel_fc_layers.M
 
-        self.set_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x):
+    def forward(self, x, h=None):
 
         """
 
         :type x: torch.Tensor
-        :rtype: list[torch.Tensor]
+        :type h: torch.Tensor
+        :rtype: list[list[torch.Tensor, list[torch.Tensor]]]
         """
-
-        return self.private_layers(self.shared_layers(x))
+        x, h = self.shared_layers(x=x, h=h)
+        return self.private_layers(x=x, h=h)

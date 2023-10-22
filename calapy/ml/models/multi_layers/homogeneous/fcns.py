@@ -3,18 +3,18 @@
 import numpy as np
 import torch
 from ...model_tools import ModelMethods as cp_ModelMethods
-from ._base import *
+from ._fcn_base import *
 # from ..... import combinations as cp_combinations
 
 
-__all__ = ['GRUNN', 'IndGRUNNs', 'GRUNNsWithSharedShallowerLayers']
+__all__ = ['FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers']
 
 # todo: add non-trainable layers
 
 
-class GRUNN(_NN):
+class FCNN(_NN):
 
-    """A Class of neural networks (NN) with only GPU layers.
+    """A Class of neural networks (NN) with only fully-connected (FC) layers.
 
 
     """
@@ -43,7 +43,7 @@ class GRUNN(_NN):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = GRUNN
+        superclass = FCNN
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -61,29 +61,28 @@ class GRUNN(_NN):
             in_features=self.n_input_features_layers[l], out_features=self.n_output_features_layers[l],
             bias=self.biases_layers[l], device=device, dtype=dtype) for l in range(0, self.L, 1)])
 
-        self.set_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x, h):
+    def forward(self, x):
 
         """
 
         :param x: A batch of the input data.
         :type x: torch.Tensor | np.ndarray
-        :param h: A batch of previous hidden states for each layer.
-        :type h: list[torch.Tensor]
-        :rtype: list[torch.Tensor, list[torch.Tensor]]
+        :rtype: torch.Tensor
         """
 
-        return self.layers(x, h)
+        return self.layers(x)
 
 
-class IndGRUNNs(_IndNNs):
+class IndFCNNs(_IndNNs):
 
-    """A Class of multiple independent neural networks (NN) with only GPU layers.
+    """A Class of multiple independent neural networks (NN) with only fully-connected (FC) layers.
 
 
     """
@@ -118,7 +117,7 @@ class IndGRUNNs(_IndNNs):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = IndGRUNNs
+        superclass = IndFCNNs
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -134,7 +133,7 @@ class IndGRUNNs(_IndNNs):
             if _IndNNs not in self.superclasses_initiated:
                 self.superclasses_initiated.append(_IndNNs)
 
-        self.layers = torch.nn.ModuleList([GRUNN(
+        self.layers = torch.nn.ModuleList([FCNN(
             n_features_layers=self.n_features_layers[m], biases_layers=self.biases_layers[m], device=device,
             dtype=dtype) for m in range(0, self.M, 1)])
 
@@ -144,19 +143,19 @@ class IndGRUNNs(_IndNNs):
         #         bias=self.biases_layers[m][l], device=device, dtype=dtype)
         #         for l in range(1, self.L[m], 1)]) for m in range(0, self.M, 1)])
 
-        self.set_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x, h):
+    def forward(self, x):
 
         """
 
         :type x: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]
-        :type h: list[torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]]
-        :rtype: list[list[torch.Tensor, list[torch.Tensor]]]
+        :rtype: list[torch.Tensor]
         """
 
         if isinstance(x, torch.Tensor):
@@ -166,17 +165,10 @@ class IndGRUNNs(_IndNNs):
         else:
             raise TypeError('type(x) = {}'.format(type(x)))
 
-        if isinstance(h, torch.Tensor):
-            h = h.split(self.n_features_first_layers, dim=self.axis_features)
-        elif isinstance(h, (list, tuple)):
-            pass
-        else:
-            raise TypeError('type(h) = {}'.format(type(h)))
-
-        return [self.layers[m](x[m], h[m]) for m in range(0, self.M, 1)]
+        return [self.layers[m](x[m]) for m in range(0, self.M, 1)]
 
 
-class GRUNNsWithSharedShallowerLayers(cp_ModelMethods):
+class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
 
     def __init__(
             self, n_features_shared_layers, n_features_private_layers,
@@ -232,7 +224,7 @@ class GRUNNsWithSharedShallowerLayers(cp_ModelMethods):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = GRUNNsWithSharedShallowerLayers
+        superclass = FCNNsWithSharedShallowerLayers
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -246,11 +238,11 @@ class GRUNNsWithSharedShallowerLayers(cp_ModelMethods):
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
-        self.shared_layers = GRUNN(
+        self.shared_layers = FCNN(
             n_features_layers=n_features_shared_layers,
             biases_layers=biases_shared_layers, device=device, dtype=dtype)
 
-        self.private_layers = IndGRUNNs(
+        self.private_layers = IndFCNNs(
             n_features_layers=n_features_private_layers,
             biases_layers=biases_private_layers, axis_features=axis_features, device=device, dtype=dtype)
 
@@ -259,19 +251,19 @@ class GRUNNsWithSharedShallowerLayers(cp_ModelMethods):
 
         self.M = self.parallel_fc_layers.M
 
-        self.set_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x, h=None):
+    def forward(self, x):
 
         """
 
         :type x: torch.Tensor
-        :type h: torch.Tensor
-        :rtype: list[list[torch.Tensor, list[torch.Tensor]]]
+        :rtype: list[torch.Tensor]
         """
-        x, h = self.shared_layers(x=x, h=h)
-        return self.private_layers(x=x, h=h)
+
+        return self.private_layers(self.shared_layers(x))

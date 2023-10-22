@@ -1,16 +1,16 @@
 
 
-from .fcn import *
-from .gru import *
+from .fcns import *
+from .rnns import *
 
 __all__ = [
-    'SequentialFCLs', 'ParallelFCLs', 'SequentialFCLsParallelFCLs',
-    'SequentialGRUs', 'ParallelGRUs', 'SequentialGRUsParallelGRUs',
-    'SequentialLSTMs',
+    'FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers',
+    'RNN', 'IndRNNs', 'RNNsWithSharedShallowerLayers',
+    'LSTMNNs'
 ]
 
 
-class SequentialLSTMs:
+class LSTMNNs:
 
     def __init__(self):
         raise NotImplementedError()

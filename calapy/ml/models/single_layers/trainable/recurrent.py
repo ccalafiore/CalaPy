@@ -2,13 +2,13 @@
 
 import numpy as np
 import torch
-from .... import combinations as cp_combinations
-from ..model_tools import ModelMethods as CPModelMethods
+from ..... import combinations as cp_combinations
+from ...model_tools import ModelMethods as CPModelMethods
 
 __all__ = ['RNN', 'LSTM', 'GRU']
 
 
-class _Recurrent(CPModelMethods):
+class _RNN(CPModelMethods):
 
     def __init__(self, type_name, axis_time, h_sigma=0.1):
 
@@ -19,7 +19,7 @@ class _Recurrent(CPModelMethods):
 
         """
 
-        superclass = _Recurrent
+        superclass = _RNN
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -86,11 +86,10 @@ class _Recurrent(CPModelMethods):
 
             axis_features_input = input.ndim - 1
             if axis_features_input == self.axis_time:
-                axis_features_input = self.axis_time - 1
+                axis_features_input -= 1
 
             if h is None:
-                batch_shape = [
-                    input.shape[a] for a in range(0, input.ndim, 1) if a not in [self.axis_time, axis_features_input]]
+                batch_shape = self.get_batch_shape(input_shape=input.shape)
                 h = self.init_h(batch_shape=batch_shape)
 
             # outputs_shape = [input.shape[a] for a in range(0, input.ndim, 1)]
@@ -129,9 +128,7 @@ class _Recurrent(CPModelMethods):
             raise ValueError('input.ndim')
         else:
             if h is None:
-                axis_features_input = input.ndim - 1
-                batch_shape = [
-                    input.shape[a] for a in range(0, input.ndim, 1) if a != axis_features_input]
+                batch_shape = self.get_batch_shape(input_shape=input.shape)
                 h = self.init_h(batch_shape=batch_shape)
 
             if self.min_input_n_dims <= input.ndim <= self._torch_max_input_n_dims:
@@ -240,6 +237,40 @@ class _Recurrent(CPModelMethods):
 
         return h
 
+    def get_batch_shape(self, input_shape):
+
+        """
+
+        :param input_shape: The input shape.
+        :type input_shape: int | list | tuple | torch.Tensor | np.ndarray
+        :return: The batch shape given the input shape "input_shape" and the recurrent model.
+        :rtype: list[int]
+        """
+
+        if isinstance(input_shape, int):
+            input_shape_f = [input_shape]
+        elif isinstance(input_shape, list):
+            input_shape_f = input_shape
+        elif isinstance(input_shape, (tuple, torch.Size)):
+            input_shape_f = list(input_shape)
+        elif isinstance(input_shape, (torch.Tensor, np.ndarray)):
+            input_shape_f = input_shape.tolist()
+        else:
+            raise TypeError('input_shape')
+
+        n_dims_input = len(input_shape_f)
+        axis_features_input = n_dims_input - 1
+
+        if self.is_timed:
+            if axis_features_input == self.axis_time:
+                axis_features_input -= 1
+            batch_shape = [
+                input_shape_f[a] for a in range(0, n_dims_input, 1) if a not in [self.axis_time, axis_features_input]]
+        else:
+            batch_shape = [input_shape_f[a] for a in range(0, n_dims_input, 1) if a != axis_features_input]
+
+        return batch_shape
+
     def set_axis_time(self, axis_time):
 
         """
@@ -264,10 +295,10 @@ class _Recurrent(CPModelMethods):
         return self.axis_time, self.is_timed, self.forward
 
 
-class RNN(_Recurrent, torch.nn.RNNCell):
+class RNN(_RNN, torch.nn.RNNCell):
 
     def __init__(
-            self, input_size, hidden_size, bias=True, nonlinearity='tanh', axis_time=0, h_sigma=0.1,
+            self, input_size, hidden_size, bias=True, axis_time=None, h_sigma=0.1, nonlinearity='tanh',
             device=None, dtype=None):
 
         superclass = RNN
@@ -279,26 +310,27 @@ class RNN(_Recurrent, torch.nn.RNNCell):
         except NameError:
             self.superclasses_initiated = []
 
-        if _Recurrent not in self.superclasses_initiated:
-            _Recurrent.__init__(self=self, type_name='rnn', axis_time=axis_time, h_sigma=h_sigma)
-            if _Recurrent not in self.superclasses_initiated:
-                self.superclasses_initiated.append(_Recurrent)
+        if _RNN not in self.superclasses_initiated:
+            _RNN.__init__(self=self, type_name='rnn', axis_time=axis_time, h_sigma=h_sigma)
+            if _RNN not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_RNN)
 
         # define attributes here
         self.layer = torch.nn.RNNCell(
             input_size=input_size, hidden_size=hidden_size, bias=bias, nonlinearity=nonlinearity,
             device=device, dtype=dtype)
 
-        self.get_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.get_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
 
-class GRU(_Recurrent, torch.nn.GRUCell):
+class GRU(_RNN, torch.nn.GRUCell):
 
-    def __init__(self, input_size, hidden_size, bias=True, axis_time=0, h_sigma=0.1, device=None, dtype=None):
+    def __init__(self, input_size, hidden_size, bias=True, axis_time=None, h_sigma=0.1, device=None, dtype=None):
 
         superclass = GRU
         try:
@@ -309,25 +341,26 @@ class GRU(_Recurrent, torch.nn.GRUCell):
         except NameError:
             self.superclasses_initiated = []
 
-        if _Recurrent not in self.superclasses_initiated:
-            _Recurrent.__init__(self=self, type_name='gru', axis_time=axis_time, h_sigma=h_sigma)
-            if _Recurrent not in self.superclasses_initiated:
-                self.superclasses_initiated.append(_Recurrent)
+        if _RNN not in self.superclasses_initiated:
+            _RNN.__init__(self=self, type_name='gru', axis_time=axis_time, h_sigma=h_sigma)
+            if _RNN not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_RNN)
 
         # define attributes here
         self.layer = torch.nn.GRUCell(
             input_size=input_size, hidden_size=hidden_size, bias=bias, device=device, dtype=dtype)
 
-        self.get_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.get_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
 
-class LSTM(_Recurrent, torch.nn.LSTMCell):
+class LSTM(_RNN, torch.nn.LSTMCell):
 
-    def __init__(self, input_size, hidden_size, bias=True, axis_time=0, h_sigma=0.1, device=None, dtype=None):
+    def __init__(self, input_size, hidden_size, bias=True, axis_time=None, h_sigma=0.1, device=None, dtype=None):
 
         superclass = LSTM
         try:
@@ -338,17 +371,18 @@ class LSTM(_Recurrent, torch.nn.LSTMCell):
         except NameError:
             self.superclasses_initiated = []
 
-        if _Recurrent not in self.superclasses_initiated:
-            _Recurrent.__init__(self=self, type_name='lstm', axis_time=axis_time, h_sigma=h_sigma)
-            if _Recurrent not in self.superclasses_initiated:
-                self.superclasses_initiated.append(_Recurrent)
+        if _RNN not in self.superclasses_initiated:
+            _RNN.__init__(self=self, type_name='lstm', axis_time=axis_time, h_sigma=h_sigma)
+            if _RNN not in self.superclasses_initiated:
+                self.superclasses_initiated.append(_RNN)
 
         # define attributes here
         self.layer = torch.nn.LSTMCell(
             input_size=input_size, hidden_size=hidden_size, bias=bias, device=device, dtype=dtype)
 
-        self.get_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.get_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)

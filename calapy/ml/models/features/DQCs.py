@@ -95,8 +95,9 @@ class DQC(no_task.LSTMSequentialParallelFCLs, DQCs.DQCMethods):
         if any([self.n_possible_actions[a] != n_possible_actions[a] for a in range(0, self.A, 1)]):
             raise ValueError('tasks, possible_actions, n_features_parallel_fc_layers')
 
-        self.set_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)

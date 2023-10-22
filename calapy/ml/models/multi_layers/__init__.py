@@ -5,9 +5,9 @@ from .heterogeneous import *
 
 
 __all__ = [
-    'SequentialFCLs', 'ParallelFCLs', 'SequentialFCLsParallelFCLs',
-    'SequentialGRUs', 'ParallelGRUs', 'SequentialGRUsParallelGRUs',
-    'SequentialLSTMs',
+    'FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers',
+    'RNN', 'IndRNNs', 'RNNsWithSharedShallowerLayers',
+    'LSTMNNs',
 
     'SequentialHeteroLayers',
 ]

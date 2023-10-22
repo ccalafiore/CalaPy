@@ -3,7 +3,7 @@
 import typing
 import numpy as np
 import torch
-from .homogeneous import SequentialFCLs, ParallelFCLs, SequentialLSTMs
+from .homogeneous import FCNN, IndFCNNs, LSTMNNs
 from ..model_tools import ModelMethods as cp_ModelMethods
 from .. import single_layers as cp_single_layers
 # from ... import tensors as cp_tensors
@@ -77,9 +77,6 @@ class SequentialHeteroLayers(cp_ModelMethods):
         self.params_of_layers = tmp_params_of_layers
         # self.layer_types = tuple([self.params_of_layers[l]['type_name'] for l in range(0, self.L, 1)])
 
-        self.device = device
-        self.dtype = dtype
-
         # define self.layers
         self.layers = torch.nn.ModuleList()
         self.hidden_state_sizes = []
@@ -88,34 +85,34 @@ class SequentialHeteroLayers(cp_ModelMethods):
 
         for l in range(0, self.L, 1):
             if self.params_of_layers[l]['type_name'] == 'fc':
-                layer_l = torch.nn.Linear(**self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                layer_l = torch.nn.Linear(**self.params_of_layers[l]['params'], device=device, dtype=dtype)
             elif self.params_of_layers[l]['type_name'] == 'rnn':
                 layer_l = cp_single_layers.RNN(
-                    **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                    **self.params_of_layers[l]['params'], device=device, dtype=dtype)
                 self.hidden_state_sizes.append(self.params_of_layers[l]['params']['hidden_size'])
                 self.recurrent_layer_indexes.append(l)
                 self.recurrent_layer_types.append(self.params_of_layers[l]['type_name'])
             elif self.params_of_layers[l]['type_name'] == 'lstm':
                 layer_l = cp_single_layers.LSTM(
-                    **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                    **self.params_of_layers[l]['params'], device=device, dtype=dtype)
                 self.hidden_state_sizes.append(self.params_of_layers[l]['params']['hidden_size'])
                 self.recurrent_layer_indexes.append(l)
                 self.recurrent_layer_types.append(self.params_of_layers[l]['type_name'])
             elif self.params_of_layers[l]['type_name'] == 'gru':
                 layer_l = cp_single_layers.GRU(
-                    **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                    **self.params_of_layers[l]['params'], device=device, dtype=dtype)
                 self.hidden_state_sizes.append(self.params_of_layers[l]['params']['hidden_size'])
                 self.recurrent_layer_indexes.append(l)
                 self.recurrent_layer_types.append(self.params_of_layers[l]['type_name'])
             elif self.params_of_layers[l]['type_name'] == 'conv1d':
                 layer_l = cp_single_layers.Conv1d(
-                    **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                    **self.params_of_layers[l]['params'], device=device, dtype=dtype)
             elif self.params_of_layers[l]['type_name'] == 'conv2d':
                 layer_l = cp_single_layers.Conv2d(
-                    **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                    **self.params_of_layers[l]['params'], device=device, dtype=dtype)
             elif self.params_of_layers[l]['type_name'] == 'conv3d':
                 layer_l = cp_single_layers.Conv3d(
-                    **self.params_of_layers[l]['params'], device=self.device, dtype=self.dtype)
+                    **self.params_of_layers[l]['params'], device=device, dtype=dtype)
             elif self.params_of_layers[l]['type_name'] == 'noise':
                 layer_l = cp_single_layers.Noise(**self.params_of_layers[l]['params'])
             elif self.params_of_layers[l]['type_name'] == 'addition':
@@ -141,9 +138,8 @@ class SequentialHeteroLayers(cp_ModelMethods):
 
             self.layers.append(module=layer_l)
 
-        if not isinstance(self.device, torch.device):
+        if superclass == type(self):
             self.get_device()
-        if not isinstance(self.dtype, torch.dtype):
             self.get_dtype()
 
         self.Z = self.n_recurrent_layers = len(self.hidden_state_sizes)
@@ -172,7 +168,9 @@ class SequentialHeteroLayers(cp_ModelMethods):
         """
         :param x: A batch of the input data.
         :type x: torch.Tensor | np.ndarray
-        :type h: list[list[np.ndarray | torch.Tensor | None] | tuple[np.ndarray | torch.Tensor | None] | np.ndarray | torch.Tensor | None] | None
+        :type h: list[list[np.ndarray | torch.Tensor | None] |
+                 tuple[np.ndarray | torch.Tensor | None] |
+                 np.ndarray | torch.Tensor | None] | None
         :rtype: tuple[torch.Tensor, list[torch.Tensor | tuple[torch.Tensor, torch.Tensor]]]
 
 
@@ -295,14 +293,14 @@ class SequentialLSTMsSequentialFCLsParallelFCLs(cp_ModelMethods):
                 self.superclasses_initiated.append(cp_ModelMethods)
 
         # todo: homogeneous.SequentialLSTMs
-        self.lstm = SequentialLSTMs(
-            n_features_inputs=n_features_inputs_lstm, n_features_outs=n_features_outs_lstm,
-            n_layers=n_layers_lstm, bias=bias_lstm,
-            dropout=dropout_lstm, bidirectional=bidirectional_lstm,
-            batch_first=batch_first, return_hc=return_hc,
-            device=self.device)
+        self.lstm = LSTMNNs()
+        # self.lstm = LSTMNNs(n_features_inputs=n_features_inputs_lstm, n_features_outs=n_features_outs_lstm,
+        #     n_layers=n_layers_lstm, bias=bias_lstm,
+        #     dropout=dropout_lstm, bidirectional=bidirectional_lstm,
+        #     batch_first=batch_first, return_hc=return_hc,
+        #     device=self.device)
 
-        self.non_parallel_fc_layers = SequentialFCLs(
+        self.non_parallel_fc_layers = FCNN(
             n_features_layers=n_features_non_parallel_fc_layers,
             biases_layers=biases_non_parallel_layers,
             device=self.device)
@@ -310,7 +308,7 @@ class SequentialLSTMsSequentialFCLsParallelFCLs(cp_ModelMethods):
         if self.lstm.n_features_all_outs != self.non_parallel_fc_layers.n_features_layers[0]:
             raise ValueError('n_features_outs_lstm, n_features_non_parallel_fc_layers[0]')
 
-        self.parallel_fc_layers = ParallelFCLs(
+        self.parallel_fc_layers = IndFCNNs(
             n_features_layers=n_features_parallel_fc_layers,
             biases_layers=biases_parallel_fc_layers, device=self.device)
 
@@ -321,8 +319,9 @@ class SequentialLSTMsSequentialFCLsParallelFCLs(cp_ModelMethods):
 
         self.return_hc = self.lstm.return_hc
 
-        self.set_device()
-        self.get_dtype()
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
