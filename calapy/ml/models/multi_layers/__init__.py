@@ -1,12 +1,12 @@
 
 
-from .homogeneous import *
-from .heterogeneous import *
+from .homo import *
+from .hetero import *
 
 
 __all__ = [
-    'FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers',
-    'RNN', 'IndRNNs', 'RNNsWithSharedShallowerLayers',
+    'FCNN', 'IndFCNNs', 'FCNNsWithSharedLayersAndPrivateLayers',
+    'RNN', 'IndRNNs', 'RNNsWithSharedLayersAndPrivateLayers', 'SharedRNNAndIndRNNsAndIndFCNNs',
     'LSTMNNs',
 
     'SequentialHeteroLayers',

@@ -10,8 +10,8 @@ from .fcns import *
 from .rnns import *
 
 __all__ = [
-    'FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers',
-    'RNN', 'IndRNNs', 'RNNsWithSharedShallowerLayers',
+    'FCNN', 'IndFCNNs', 'FCNNsWithSharedLayersAndPrivateLayers',
+    'RNN', 'IndRNNs', 'RNNsWithSharedLayersAndPrivateLayers', 'SharedRNNAndIndRNNsAndIndFCNNs',
     'LSTMNNs'
 ]
 

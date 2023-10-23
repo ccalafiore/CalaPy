@@ -5,10 +5,11 @@ import torch
 from ...model_tools import ModelMethods as cp_ModelMethods
 from ... import single_layers as cp_single_layers
 from ._base import *
+from .fcns import IndFCNNs as cp_multi_homo_layers_IndFCNNs
 # from ..... import combinations as cp_combinations
 
 
-__all__ = ['RNN', 'IndRNNs', 'RNNsWithSharedLayersAndPrivateLayers']
+__all__ = ['RNN', 'IndRNNs', 'RNNsWithSharedLayersAndPrivateLayers', 'SharedRNNAndIndRNNsAndIndFCNNs']
 
 # todo: add non-trainable layers
 
@@ -276,7 +277,7 @@ class IndRNNs(_IndNNs):
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def forward(self, x, h):
+    def forward(self, x, h=None):
 
         """
 
@@ -301,7 +302,10 @@ class IndRNNs(_IndNNs):
         else:
             raise TypeError('type(h) = {}'.format(type(h)))
 
-        return [self.models[m](x[m], h[m]) for m in range(0, self.M, 1)]
+        for m in range(0, self.M, 1):
+            x[m], h[m] = self.models[m](x[m], h[m])
+
+        return x, h
 
     def init_h(self, batch_shape, generators=None):
 
@@ -547,3 +551,109 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         self.axis_time, self.is_timed = self.shared_layers.axis_time, self.shared_layers.is_timed
 
         return self.axis_time, self.is_timed
+
+
+class SharedRNNAndIndRNNsAndIndFCNNs(RNNsWithSharedLayersAndPrivateLayers):
+
+    def __init__(
+            self, type_name, n_features_shared_rnn_layers, n_features_private_rnn_layers, n_features_private_fc_layers,
+            biases_shared_rnn_layers=True, biases_private_rnn_layers=True, biases_private_fc_layers=True,
+            axis_features=None, axis_time=None, h_sigma=0.1, nonlinearity='tanh',
+            device=None, dtype=None):
+
+        """
+
+        :param n_features_shared_rnn_layers: A sequence of ints whose first element is the input size of the first shared
+            layer and all other elements from the second to the last are the output sizes of all shared layers. The
+            models share L layers, where L=len(n_features_shared_rnn_layers)-1. The n_features_shared_rnn_layers must have 2
+            elements or more such that the NN can have 1 shared layer or more.
+        :type n_features_shared_rnn_layers: list[int] | tuple[int] | np.ndarray[int] | torch.Tensor[int]
+
+        :param n_features_private_rnn_layers: A sequence of M sequences, one per NN, where M is the number of NNs with
+            private layers. The M sequences can have different sizes, but each size should be 2 or more. The first
+            element of the m_th sequence is the input size of the first private layer of m_th NN. The sum of the input
+            sizes of the first private layers of all models must be equal to the output size of the last shared layer of
+            all models (i.e. sum(n_features_private_rnn_layers[0][0], n_features_private_rnn_layers[1][0], ...,
+            n_features_private_rnn_layers[M-1][0]) = n_features_shared_rnn_layers[-1]). The other elements from the second to
+            the last of the m_th sequence are the output sizes (the actual layer sizes) of all private layers of the
+            m_th NN. The m_th NN have L[m] private layers, where L[m]=len(n_features_private_rnn_layers[m])-1.
+        :type n_features_private_rnn_layers: list[list[int] | tuple[int] | np.ndarray[int] | torch.Tensor[int]] |
+                                 tuple[list[int] | tuple[int] | np.ndarray[int] | torch.Tensor[int]]
+
+        :param biases_shared_rnn_layers: A bool or sequence of L bools where L is the number of shared layers of all model.
+            If it is a bool and is True (default), all shared layers of all models WILL HAVE trainable biases. If it is
+            a bool and is False, all shared layers of all models WILL NOT HAVE trainable biases. If it is a sequence of
+            L bools and biases_rnn_layers[l] is True, then the l_th shared layer of the NNs WILL HAVE trainable biases. If
+            it is a sequence of L bools and biases_rnn_layers[l] is False, then the l_th shared layer of the models WILL NOT
+            HAVE trainable biases.
+        :type biases_shared_rnn_layers: bool | list[bool | list[bool] | tuple[bool] | np.ndarray[bool] | torch.Tensor[bool]]
+
+        :param biases_private_rnn_layers: A bool, sequence of M bools, or a sequence of M sequences of L[m] bools where M is
+            the number of models with private deeper layers and L[m] is the number of private layers of the
+            m_th model. If it is a bool and is True (default), all private layers of all models WILL HAVE trainable
+            biases. If it is a bool and is False, all private layers of all models WILL NOT HAVE trainable biases.
+            If it is a sequence of M bools and biases_rnn_layers[m] is True, then all private layers of the m_th NN WILL
+            HAVE trainable biases. If it is a sequence of M bools and biases_rnn_layers[m] is False, then all private
+            layers of the m_th model WILL NOT HAVE trainable biases. If it is a sequence of M sequences of L[m] bools
+            and biases_rnn_layers[m][l] is True, then the l_th private layer of the m_th model WILL HAVE trainable biases.
+            If it is a sequence of M sequences of L[m] bools and biases_rnn_layers[m][l] is False, then the l_th private
+            layer of the m_th model WILL NOT HAVE trainable biases.
+        :type biases_private_rnn_layers: bool |
+            list[bool | list[bool] | tuple[bool] | np.ndarray[bool] | torch.Tensor[bool]] |
+            tuple[bool | list[bool] | tuple[bool] | np.ndarray[bool] | torch.Tensor[bool]] |
+            np.ndarray[bool | list[bool] | tuple[bool] | np.ndarray[bool] | torch.Tensor[bool]]
+
+        :param device: The torch device of all layers.
+        :type device: torch.device | str | int | None
+
+        :param dtype: The torch data type of all layers.
+        :type dtype: torch.dtype | str| None
+        """
+
+        superclass = SharedRNNAndIndRNNsAndIndFCNNs
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
+            self.superclasses_initiated = []
+
+        if RNNsWithSharedLayersAndPrivateLayers not in self.superclasses_initiated:
+            RNNsWithSharedLayersAndPrivateLayers.__init__(
+                self=self, type_name=type_name,
+                n_features_shared_layers=n_features_shared_rnn_layers,
+                n_features_private_layers=n_features_private_rnn_layers,
+                biases_shared_layers=biases_shared_rnn_layers, biases_private_layers=biases_private_rnn_layers,
+                axis_features=axis_features, axis_time=axis_time, h_sigma=h_sigma, nonlinearity=nonlinearity,
+                device=device, dtype=dtype)
+
+            if RNNsWithSharedLayersAndPrivateLayers not in self.superclasses_initiated:
+                self.superclasses_initiated.append(RNNsWithSharedLayersAndPrivateLayers)
+
+        self.private_fc_layers = cp_multi_homo_layers_IndFCNNs(
+            n_features_layers=n_features_private_fc_layers, biases_layers=biases_private_fc_layers,
+            axis_features=axis_features, device=device, dtype=dtype)
+
+        if superclass == type(self):
+            self.set_device()
+            self.get_dtype()
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
+
+    def forward(self, x, h=None):
+
+        """
+
+        :type x: torch.Tensor
+        :type h: torch.Tensor
+        :rtype: list[list[torch.Tensor, list[torch.Tensor]]]
+        """
+        if h is None:
+            h = [None, None]
+
+        x, h[0] = self.shared_layers(x=x, h=h[0])
+        x, h[1] = self.private_layers(x=x, h=h[1])
+
+        return self.private_fc_layers(x=x), h
