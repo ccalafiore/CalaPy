@@ -168,9 +168,9 @@ class _IndNNs(cp_ModelMethods):
         self.n_features_last_layers = [self.n_features_layers[m][-1] for m in range(0, self.M, 1)]
         self.n_features_last_layers_together = sum(self.n_features_last_layers)
 
-        self.n_input_features_layers = [self.n_features_layers[m][slice(0, self.L, 1)] for m in range(0, self.M, 1)]
+        self.n_input_features_layers = [self.n_features_layers[m][slice(0, self.L[m], 1)] for m in range(0, self.M, 1)]
         self.n_output_features_layers = [
-            self.n_features_layers[m][slice(1, self.L + 1, 1)] for m in range(0, self.M, 1)]
+            self.n_features_layers[m][slice(1, self.L[m] + 1, 1)] for m in range(0, self.M, 1)]
 
         if isinstance(biases_layers, bool):
             self.biases_layers = [

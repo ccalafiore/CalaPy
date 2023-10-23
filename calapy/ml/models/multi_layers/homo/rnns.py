@@ -121,15 +121,14 @@ class RNN(_NN):
         if h is None:
             h = [None for l in range(0, self.L, 1)]  # type: list
 
-        for l in range(0, self.L, 1):
-
-            # if h[l] is None:
-            #     batch_shape = self.get_batch_shape(input_shape=x.shape)
-            #     h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=None)
-
-            x, h[l] = self.layers[l](x, h[l])
-
-        return x, h
+        if self.is_timed:
+            for l in range(0, self.L, 1):
+                x, h[l] = self.layers[l](x, h[l])
+            return x, h
+        else:
+            for l in range(0, self.L, 1):
+                x = h[l] = self.layers[l](x, h[l])
+            return x, h
 
     def init_h(self, batch_shape, generators=None):
 
@@ -287,7 +286,7 @@ class IndRNNs(_IndNNs):
         """
 
         if isinstance(x, torch.Tensor):
-            x = x.split(self.n_features_first_layers, dim=self.axis_features)
+            x = list(x.split(self.n_features_first_layers, dim=self.axis_features))
         elif isinstance(x, (list, tuple)):
             pass
         else:
@@ -296,14 +295,16 @@ class IndRNNs(_IndNNs):
         if h is None:
             h = [None for m in range(0, self.M, 1)]
         elif isinstance(h, torch.Tensor):
-            h = h.split(self.n_features_first_layers, dim=self.axis_features)
-        elif isinstance(h, (list, tuple)):
+            h = list(h.split(self.n_features_first_layers, dim=self.axis_features))
+        elif isinstance(h, list):
             pass
+        elif isinstance(h, tuple):
+            h = list(h)
         else:
             raise TypeError('type(h) = {}'.format(type(h)))
 
         for m in range(0, self.M, 1):
-            x[m], h[m] = self.models[m](x[m], h[m])
+            x[m], h[m] = self.models[m](x=x[m], h=h[m])
 
         return x, h
 
@@ -442,6 +443,10 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
+        self.accepted_type_names_with_h = tuple(['rnn', 'gru'])
+        self.accepted_type_names_with_hc = tuple(['lstm'])
+        self.accepted_type_names = self.accepted_type_names_with_h + self.accepted_type_names_with_hc
+
         if isinstance(type_name, str):
             type_name_f = type_name.lower()
             if type_name_f in self.accepted_type_names:
@@ -523,8 +528,8 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         # for m in range(0, self.M, 1):
         #     h[m] = self.models[m].init_h(batch_shape=batch_shape, generator=generators[m])
         # return h
-        return [[self.shared_layers.init_h(batch_shape=batch_shape, generators=generators[0])],
-                [self.private_layers.init_h(batch_shape=batch_shape, generators=generators[1])]]
+        return [self.shared_layers.init_h(batch_shape=batch_shape, generators=generators[0]),
+                self.private_layers.init_h(batch_shape=batch_shape, generators=generators[1])]
 
     def get_batch_shape(self, input_shape):
 

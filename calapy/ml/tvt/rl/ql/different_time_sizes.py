@@ -127,8 +127,6 @@ def train(
 
         for environment_eb in env_iterator:
 
-
-
             hc_ebit = None, None  # todo
 
             t = 0

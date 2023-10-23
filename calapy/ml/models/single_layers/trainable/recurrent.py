@@ -295,7 +295,7 @@ class _RNN(CPModelMethods):
         return self.axis_time, self.is_timed, self.forward
 
 
-class RNN(_RNN, torch.nn.RNNCell):
+class RNN(_RNN):
 
     def __init__(
             self, input_size, hidden_size, bias=True, axis_time=None, h_sigma=0.1, nonlinearity='tanh',
@@ -328,7 +328,7 @@ class RNN(_RNN, torch.nn.RNNCell):
             self.superclasses_initiated.append(superclass)
 
 
-class GRU(_RNN, torch.nn.GRUCell):
+class GRU(_RNN):
 
     def __init__(self, input_size, hidden_size, bias=True, axis_time=None, h_sigma=0.1, device=None, dtype=None):
 
@@ -358,7 +358,7 @@ class GRU(_RNN, torch.nn.GRUCell):
             self.superclasses_initiated.append(superclass)
 
 
-class LSTM(_RNN, torch.nn.LSTMCell):
+class LSTM(_RNN):
 
     def __init__(self, input_size, hidden_size, bias=True, axis_time=None, h_sigma=0.1, device=None, dtype=None):
 

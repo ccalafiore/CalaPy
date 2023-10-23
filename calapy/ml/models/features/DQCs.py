@@ -7,7 +7,8 @@ from . import no_task
 from ...output_methods.features import DQCs
 
 
-class DQC(no_task.LSTMSequentialParallelFCLs, DQCs.DQCMethods):
+# class DQC(no_task.LSTMSequentialParallelFCLs, DQCs.DQCMethods):
+class DQC(DQCs.DQCMethods):
 
     def __init__(
             self,
