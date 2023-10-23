@@ -124,11 +124,14 @@ class RNN(_NN):
         if self.is_timed:
             for l in range(0, self.L, 1):
                 x, h[l] = self.layers[l](x, h[l])
-            return x, h
+        elif self.type_name == 'lstm':
+            for l in range(0, self.L, 1):
+                h[l] = self.layers[l](x, h[l])
+                x = h[l][0]
         else:
             for l in range(0, self.L, 1):
                 x = h[l] = self.layers[l](x, h[l])
-            return x, h
+        return x, h
 
     def init_h(self, batch_shape, generators=None):
 
@@ -541,7 +544,7 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         :rtype: list[int]
         """
 
-        return self.shared_layers[0].get_batch_shape(input_shape=input_shape)
+        return self.shared_layers.get_batch_shape(input_shape=input_shape)
 
     def set_axis_time(self, axis_time):
 
