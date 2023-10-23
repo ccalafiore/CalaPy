@@ -3,11 +3,11 @@
 import numpy as np
 import torch
 from ...model_tools import ModelMethods as cp_ModelMethods
-from ._fcn_base import *
+from ._base import *
 # from ..... import combinations as cp_combinations
 
 
-__all__ = ['FCNN', 'IndFCNNs', 'FCNNsWithSharedShallowerLayers']
+__all__ = ['FCNN', 'IndFCNNs', 'FCNNsWithSharedLayersAndPrivateLayers']
 
 # todo: add non-trainable layers
 
@@ -168,7 +168,7 @@ class IndFCNNs(_IndNNs):
         return [self.layers[m](x[m]) for m in range(0, self.M, 1)]
 
 
-class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
+class FCNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
 
     def __init__(
             self, n_features_shared_layers, n_features_private_layers,
@@ -224,7 +224,7 @@ class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = FCNNsWithSharedShallowerLayers
+        superclass = FCNNsWithSharedLayersAndPrivateLayers
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -249,7 +249,7 @@ class FCNNsWithSharedShallowerLayers(cp_ModelMethods):
         if self.shared_layers.n_features_layers[-1] != self.private_layers.n_features_first_layers_together:
             raise ValueError('n_features_shared_layers[-1], n_features_private_layers[:][0]')
 
-        self.M = self.parallel_fc_layers.M
+        self.M = self.private_layers.M
 
         if superclass == type(self):
             self.set_device()

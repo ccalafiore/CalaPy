@@ -4,11 +4,11 @@ import numpy as np
 import torch
 from ...model_tools import ModelMethods as cp_ModelMethods
 from ... import single_layers as cp_single_layers
-from ._fcn_base import *
+from ._base import *
 # from ..... import combinations as cp_combinations
 
 
-__all__ = ['RNN', 'IndRNNs', 'RNNsWithSharedShallowerLayers']
+__all__ = ['RNN', 'IndRNNs', 'RNNsWithSharedLayersAndPrivateLayers']
 
 # todo: add non-trainable layers
 
@@ -122,9 +122,9 @@ class RNN(_NN):
 
         for l in range(0, self.L, 1):
 
-            if h[l] is None:
-                batch_shape = self.get_batch_shape(input_shape=x.shape)
-                h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=None)
+            # if h[l] is None:
+            #     batch_shape = self.get_batch_shape(input_shape=x.shape)
+            #     h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=None)
 
             x, h[l] = self.layers[l](x, h[l])
 
@@ -160,13 +160,11 @@ class RNN(_NN):
         else:
             raise TypeError('generators')
 
-        h = [None for l in range(0, self.L, 1)]  # type: list
-
-        for l in range(0, self.L, 1):
-
-            h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=generators[l])
-
-        return h
+        # h = [None for l in range(0, self.L, 1)]  # type: list
+        # for l in range(0, self.L, 1):
+        #     h[l] = self.layers[l].init_h(batch_shape=batch_shape, generator=generators[l])
+        # return h
+        return [self.layers[l].init_h(batch_shape=batch_shape, generator=generators[l]) for l in range(0, self.L, 1)]
 
     def get_batch_shape(self, input_shape):
 
@@ -191,8 +189,7 @@ class RNN(_NN):
 
             self.layers[l].set_axis_time(axis_time=axis_time)
 
-        self.axis_time = self.layers[0].axis_time
-        self.is_timed = self.layers[0].is_timed
+        self.axis_time, self.is_timed = self.layers[0].axis_time, self.layers[0].is_timed
 
         return self.axis_time, self.is_timed
 
@@ -265,10 +262,12 @@ class IndRNNs(_IndNNs):
         else:
             raise TypeError('type_name')
 
-        self.layers = torch.nn.ModuleList([RNN(
+        self.models = torch.nn.ModuleList([RNN(
             type_name=self.type_name, n_features_layers=self.n_features_layers[m], biases_layers=self.biases_layers[m],
             axis_time=axis_time, h_sigma=h_sigma, nonlinearity=nonlinearity, device=device, dtype=dtype)
             for m in range(0, self.M, 1)])
+
+        self.axis_time, self.is_timed = self.models[0].axis_time, self.models[0].is_timed
 
         if superclass == type(self):
             self.set_device()
@@ -293,21 +292,87 @@ class IndRNNs(_IndNNs):
         else:
             raise TypeError('type(x) = {}'.format(type(x)))
 
-        if isinstance(h, torch.Tensor):
+        if h is None:
+            h = [None for m in range(0, self.M, 1)]
+        elif isinstance(h, torch.Tensor):
             h = h.split(self.n_features_first_layers, dim=self.axis_features)
         elif isinstance(h, (list, tuple)):
             pass
         else:
             raise TypeError('type(h) = {}'.format(type(h)))
 
-        return [self.layers[m](x[m], h[m]) for m in range(0, self.M, 1)]
+        return [self.models[m](x[m], h[m]) for m in range(0, self.M, 1)]
+
+    def init_h(self, batch_shape, generators=None):
+
+        """
+
+        :param batch_shape: The shape of the batch input data without the time and the feature dimensions.
+        :type batch_shape: int | list | tuple | torch.Size | torch.Tensor | np.ndarray
+        :param generators: The instances of the torch generator to generate the tensors h with random values from a
+            normal distribution.
+        :type generators: list | tuple | torch.Generator | None
+
+        :rtype: list[list[torch.Tensor | list[torch.Tensor]]]
+
+        """
+
+        if generators is None:
+            generators = [None for m in range(0, self.M, 1)]  # type: list
+        elif isinstance(generators, torch.Generator):
+            generators = [generators for m in range(0, self.M, 1)]  # type: list
+        elif isinstance(generators, (list, tuple)):
+            len_gens = len(generators)
+            if len_gens != self.M:
+                if len_gens == 0:
+                    generators = [None for m in range(0, self.M, 1)]  # type: list
+                elif len_gens == 1:
+                    generators = [generators[0] for m in range(0, self.M, 1)]  # type: list
+                else:
+                    raise ValueError('len(generators)')
+        else:
+            raise TypeError('generators')
+
+        # h = [None for m in range(0, self.M, 1)]  # type: list
+        # for m in range(0, self.M, 1):
+        #     h[m] = self.models[m].init_h(batch_shape=batch_shape, generator=generators[m])
+        # return h
+        return [self.models[m].init_h(batch_shape=batch_shape, generators=generators[m]) for m in range(0, self.M, 1)]
+
+    def get_batch_shape(self, input_shape):
+
+        """
+
+        :param input_shape: The input shape.
+        :type input_shape: int | list | tuple | torch.Tensor | np.ndarray
+        :return: The batch shape given the input shape "input_shape" and the recurrent model.
+        :rtype: list[int]
+        """
+
+        return self.models[0].get_batch_shape(input_shape=input_shape)
+
+    def set_axis_time(self, axis_time):
+
+        """
+
+        :type axis_time: int | None
+        """
+
+        for m in range(0, self.M, 1):
+
+            self.models[m].set_axis_time(axis_time=axis_time)
+
+        self.axis_time, self.is_timed = self.models[0].axis_time, self.models[0].is_timed
+
+        return self.axis_time, self.is_timed
 
 
-class RNNsWithSharedShallowerLayers(cp_ModelMethods):
+class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
 
     def __init__(
-            self, n_features_shared_layers, n_features_private_layers,
-            biases_shared_layers=True, biases_private_layers=True, axis_features=None,
+            self, type_name, n_features_shared_layers, n_features_private_layers,
+            biases_shared_layers=True, biases_private_layers=True,
+            axis_features=None, axis_time=None, h_sigma=0.1, nonlinearity='tanh',
             device=None, dtype=None):
 
         """
@@ -359,7 +424,7 @@ class RNNsWithSharedShallowerLayers(cp_ModelMethods):
         :type dtype: torch.dtype | str| None
         """
 
-        superclass = RNNsWithSharedShallowerLayers
+        superclass = RNNsWithSharedLayersAndPrivateLayers
         try:
             # noinspection PyUnresolvedReferences
             self.superclasses_initiated
@@ -373,18 +438,30 @@ class RNNsWithSharedShallowerLayers(cp_ModelMethods):
             if cp_ModelMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(cp_ModelMethods)
 
+        if isinstance(type_name, str):
+            type_name_f = type_name.lower()
+            if type_name_f in self.accepted_type_names:
+                self.type_name = type_name_f
+            else:
+                raise ValueError('type_name')
+        else:
+            raise TypeError('type_name')
+
         self.shared_layers = RNN(
-            n_features_layers=n_features_shared_layers,
-            biases_layers=biases_shared_layers, device=device, dtype=dtype)
+            type_name=self.type_name, n_features_layers=n_features_shared_layers, biases_layers=biases_shared_layers,
+            axis_time=axis_time, h_sigma=h_sigma, nonlinearity=nonlinearity, device=device, dtype=dtype)
 
         self.private_layers = IndRNNs(
-            n_features_layers=n_features_private_layers,
-            biases_layers=biases_private_layers, axis_features=axis_features, device=device, dtype=dtype)
+            type_name=self.type_name, n_features_layers=n_features_private_layers, biases_layers=biases_private_layers,
+            axis_features=axis_features, axis_time=axis_time, h_sigma=h_sigma, nonlinearity=nonlinearity,
+            device=device, dtype=dtype)
+
+        self.axis_time, self.is_timed = self.shared_layers.axis_time, self.shared_layers.is_timed
 
         if self.shared_layers.n_features_layers[-1] != self.private_layers.n_features_first_layers_together:
             raise ValueError('n_features_shared_layers[-1], n_features_private_layers[:][0]')
 
-        self.M = self.parallel_fc_layers.M
+        self.M = self.private_layers.M
 
         if superclass == type(self):
             self.set_device()
@@ -401,5 +478,72 @@ class RNNsWithSharedShallowerLayers(cp_ModelMethods):
         :type h: torch.Tensor
         :rtype: list[list[torch.Tensor, list[torch.Tensor]]]
         """
-        x, h = self.shared_layers(x=x, h=h)
-        return self.private_layers(x=x, h=h)
+        if h is None:
+            h = [None, None]
+
+        x, h[0] = self.shared_layers(x=x, h=h[0])
+        x, h[1] = self.private_layers(x=x, h=h[1])
+        return x, h
+
+    def init_h(self, batch_shape, generators=None):
+
+        """
+
+        :param batch_shape: The shape of the batch input data without the time and the feature dimensions.
+        :type batch_shape: int | list | tuple | torch.Size | torch.Tensor | np.ndarray
+        :param generators: The instances of the torch generator to generate the tensors h with random values from a
+            normal distribution.
+        :type generators: list | tuple | torch.Generator | None
+
+        :rtype: list[list[torch.Tensor | list[torch.Tensor]]]
+
+        """
+
+        if generators is None:
+            generators = [None, None]  # type: list
+        elif isinstance(generators, torch.Generator):
+            generators = [generators, generators]  # type: list
+        elif isinstance(generators, (list, tuple)):
+            len_gens = len(generators)
+            if len_gens != 2:
+                if len_gens == 0:
+                    generators = [None, None]  # type: list
+                elif len_gens == 1:
+                    generators = [generators[0], generators[0]]  # type: list
+                else:
+                    raise ValueError('len(generators)')
+        else:
+            raise TypeError('generators')
+
+        # h = [None for m in range(0, self.M, 1)]  # type: list
+        # for m in range(0, self.M, 1):
+        #     h[m] = self.models[m].init_h(batch_shape=batch_shape, generator=generators[m])
+        # return h
+        return [[self.shared_layers.init_h(batch_shape=batch_shape, generators=generators[0])],
+                [self.private_layers.init_h(batch_shape=batch_shape, generators=generators[1])]]
+
+    def get_batch_shape(self, input_shape):
+
+        """
+
+        :param input_shape: The input shape.
+        :type input_shape: int | list | tuple | torch.Tensor | np.ndarray
+        :return: The batch shape given the input shape "input_shape" and the recurrent model.
+        :rtype: list[int]
+        """
+
+        return self.shared_layers[0].get_batch_shape(input_shape=input_shape)
+
+    def set_axis_time(self, axis_time):
+
+        """
+
+        :type axis_time: int | None
+        """
+        self.shared_layers.set_axis_time(axis_time=axis_time)
+
+        self.private_layers.set_axis_time(axis_time=axis_time)
+
+        self.axis_time, self.is_timed = self.shared_layers.axis_time, self.shared_layers.is_timed
+
+        return self.axis_time, self.is_timed

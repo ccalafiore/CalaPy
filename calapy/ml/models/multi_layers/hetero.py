@@ -1,9 +1,14 @@
 
+"""The module for heterogeneous neural networks (NNs).
+
+The heterogeneous NNs can have heterogeneous layers (i.e. some fully-connected, some recurrent, some convolutional, and
+so on).
+"""
 
 import typing
 import numpy as np
 import torch
-from .homogeneous import FCNN, IndFCNNs, LSTMNNs
+from .homo import FCNN, IndFCNNs, LSTMNNs
 from ..model_tools import ModelMethods as cp_ModelMethods
 from .. import single_layers as cp_single_layers
 # from ... import tensors as cp_tensors
