@@ -3,7 +3,7 @@
 import importlib
 
 
-submodules = ['same_time_sizes', 'different_time_sizes']
+submodules = []
 
 others = []
 __all__ = submodules + others
