@@ -10,10 +10,10 @@ import typing
 import os
 import math
 import numpy as np
-from .. import txt as cp_txt
-from .. import maths as cp_maths
-from .. import clock as cp_clock
-from .. import strings as cp_strings
+from .... import txt as cp_txt
+from .... import maths as cp_maths
+from .... import clock as cp_clock
+from .... import strings as cp_strings
 
 
 def feature_classifier(model, loader, criterion):

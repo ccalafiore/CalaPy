@@ -5,11 +5,11 @@
 # https://discuss.pytorch.org/t/normalize-each-input-image-in-a-batch-independently-and-inverse-normalize-the-output/23739
 # https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
 
-import torch
-from .. import txt as cp_txt
-from .. import clock as cp_clock
-from .. import directory as cp_directory
 import os
+import torch
+from .... import txt as cp_txt
+from .... import clock as cp_clock
+from .... import directory as cp_directory
 
 
 def extract_features(model, loader, directory_dataset_features=None):

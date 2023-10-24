@@ -13,7 +13,7 @@ class ClassifierMethods(OutputMethods):
 
     def __init__(
             self, axis_features_outs: int, axis_models_losses: int,  C: int,
-            loss_weights_classifiers: (
+            loss_scales_classifiers: (
                     typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor]) = None) -> None:
 
         superclass = ClassifierMethods
@@ -33,12 +33,12 @@ class ClassifierMethods(OutputMethods):
         else:
             raise TypeError('M')
 
-        self.loss_weights_classifiers = set_loss_weights(M=self.C, loss_weights=loss_weights_classifiers)
+        self.loss_scales_classifiers = _set_loss_scales(M=self.C, loss_scales=loss_scales_classifiers)
 
         if OutputMethods not in self.superclasses_initiated:
             OutputMethods.__init__(
                 self=self, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, M=self.C, loss_weights=self.loss_weights_classifiers)
+                axis_models_losses=axis_models_losses, M=self.C, loss_scales=self.loss_scales_classifiers)
             if OutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(OutputMethods)
 
@@ -147,17 +147,17 @@ class ClassifierMethods(OutputMethods):
     def reduce_class_prediction_losses(
             self, class_prediction_losses: typing.Union[torch.Tensor, np.ndarray],
             axes_not_included: typing.Union[int, list, tuple, np.ndarray, torch.Tensor] = None,
-            weighted: bool = False,
-            loss_weights_classifiers: typing.Union[list, tuple, np.ndarray, torch.Tensor] = None,
-            format_weights: bool = True):
+            scaled: bool = False,
+            loss_scales_classifiers: typing.Union[list, tuple, np.ndarray, torch.Tensor] = None,
+            format_scales: bool = True):
 
-        if weighted and (loss_weights_classifiers is None):
-            loss_weights_classifiers = self.loss_weights_classifiers
-            format_weights = False
+        if scaled and (loss_scales_classifiers is None):
+            loss_scales_classifiers = self.loss_scales_classifiers
+            format_scales = False
 
         reduced_class_prediction_losses = self.reduce_losses(
             losses=class_prediction_losses, axes_not_included=axes_not_included,
-            weighted=weighted, loss_weights=loss_weights_classifiers, format_weights=format_weights)
+            scaled=scaled, loss_scales=loss_scales_classifiers, format_scales=format_scales)
 
         return reduced_class_prediction_losses
 
@@ -166,7 +166,7 @@ class TimedClassifierMethods(TimedOutputMethods, ClassifierMethods):
 
     def __init__(
             self, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, C: int,
-            loss_weights_classifiers: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
+            loss_scales_classifiers: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = TimedClassifierMethods
         try:
@@ -180,14 +180,14 @@ class TimedClassifierMethods(TimedOutputMethods, ClassifierMethods):
         if ClassifierMethods not in self.superclasses_initiated:
             ClassifierMethods.__init__(
                 self, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, C=C, loss_weights_classifiers=loss_weights_classifiers)
+                axis_models_losses=axis_models_losses, C=C, loss_scales_classifiers=loss_scales_classifiers)
             if ClassifierMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(ClassifierMethods)
 
         if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
                 self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, M=self.C,  loss_weights=self.loss_weights_classifiers)
+                axis_models_losses=axis_models_losses, M=self.C,  loss_scales=self.loss_scales_classifiers)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
 

@@ -13,10 +13,10 @@ import numpy as np
 import math
 import os
 from .tools import Shifts
-from ... import array as cp_array
-from ... import directory as cp_directory
-from ... import maths as cp_maths
-from ... import combinations as cp_combinations
+from ..... import array as cp_array
+from ..... import directory as cp_directory
+from ..... import maths as cp_maths
+from ..... import combinations as cp_combinations
 
 __all__ = ['ImageLoader']
 

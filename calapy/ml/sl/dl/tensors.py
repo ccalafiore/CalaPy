@@ -1,7 +1,7 @@
 
 import numpy as np
 import torch
-from ..maths import is_nan
+from ....maths import is_nan
 
 
 def add_noise(x, scale=0.1, mu=0.0, generator=None):

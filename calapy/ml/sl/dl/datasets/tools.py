@@ -10,8 +10,8 @@ import torchvision
 import typing
 import math
 import numpy as np
-from ... import array as cp_array
-from ... import directory as cp_directory
+from ..... import array as cp_array
+from ..... import directory as cp_directory
 
 __all__ = ['Shifts', 'define_transforms', 'define_file_format']
 

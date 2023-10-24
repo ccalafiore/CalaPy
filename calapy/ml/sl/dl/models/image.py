@@ -9,9 +9,9 @@ import torch
 import torchvision
 
 if __name__ == "__main__":
-    from calapy.ml import devices as cp_device
+    from calapy.ml.sl.dl import devices as cp_device
 else:
-    from ...ml import devices as cp_device
+    from ...dl import devices as cp_device
 
 
 class ResNetNoLastLayer(torchvision.models.resnet.ResNet):

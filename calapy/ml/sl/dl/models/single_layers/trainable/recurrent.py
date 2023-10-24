@@ -2,7 +2,7 @@
 
 import numpy as np
 import torch
-from ..... import combinations as cp_combinations
+from ....... import combinations as cp_combinations
 from ...model_tools import ModelMethods as CPModelMethods
 
 __all__ = ['RNN', 'LSTM', 'GRU']

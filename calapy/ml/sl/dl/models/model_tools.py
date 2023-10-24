@@ -3,7 +3,7 @@
 import torch
 import typing
 import numpy as np
-from ...maths import prod as cp_prod
+from .....maths import prod as cp_prod
 
 __all__ = ['ModelMethods']
 
