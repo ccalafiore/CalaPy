@@ -3,7 +3,7 @@
 import importlib
 
 
-submodules = []
+submodules = ['models', 'output_methods']
 
 others = []
 __all__ = submodules + others

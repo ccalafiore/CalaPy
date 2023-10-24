@@ -15,7 +15,7 @@ class DQCMethods(DQNMethods, TimedClassifierMethods):
     def __init__(
             self, tasks: typing.Union[str, list, tuple, np.ndarray],
             possible_actions: [list, tuple],
-            axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int,
+            axis_time_outs, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int,
             movement_type: str = 'proactive',
             same_actions: typing.Union[int, list, tuple, np.ndarray, torch.Tensor, None] = None,
             gamma: typing.Union[int, float] = .999, reward_bias: typing.Union[int, float] = .0,
@@ -65,8 +65,9 @@ class DQCMethods(DQNMethods, TimedClassifierMethods):
 
         if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
-                self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, M=M, loss_weights=loss_weights)
+                self=self, axis_time_outs=axis_time_outs, axis_batch_outs=axis_batch_outs,
+                axis_features_outs=axis_features_outs, axis_models_losses=axis_models_losses,
+                M=M, loss_weights=loss_weights)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
 

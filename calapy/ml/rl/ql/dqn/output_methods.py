@@ -14,7 +14,7 @@ class DQNMethods(OutputMethods):
     def __init__(
             self, axis_features_outs, axis_models_losses,
             possible_actions, action_selection_type='active', same_indexes_actions=None,
-            gamma=.999, reward_bias=.0, loss_scales_actors=None):
+            gamma=0.999, reward_bias=0.0, loss_scales_actors=None):
 
         """
 
@@ -297,9 +297,9 @@ class TimedDQNMethods(DQNMethods, TimedOutputMethods):
 
     def __init__(
             self,
-            axis_batch_outs, axis_features_outs, axis_models_losses,
+            axis_time_outs, axis_batch_outs, axis_features_outs, axis_models_losses,
             possible_actions, action_selection_type='active', same_indexes_actions=None,
-            gamma=.999, reward_bias=.0, loss_scales_actors=None):
+            gamma=0.999, reward_bias=0.0, loss_scales_actors=None):
 
         """
 
@@ -336,8 +336,9 @@ class TimedDQNMethods(DQNMethods, TimedOutputMethods):
 
         if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
-                self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, M=self.A, loss_scales=self.loss_scales_actors)
+                self=self, axis_time_outs=axis_time_outs, axis_batch_outs=axis_batch_outs,
+                axis_features_outs=axis_features_outs, axis_models_losses=axis_models_losses,
+                M=self.A, loss_scales=self.loss_scales_actors)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
 

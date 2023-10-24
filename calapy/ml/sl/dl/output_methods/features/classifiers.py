@@ -165,7 +165,7 @@ class ClassifierMethods(OutputMethods):
 class TimedClassifierMethods(TimedOutputMethods, ClassifierMethods):
 
     def __init__(
-            self, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, C: int,
+            self, axis_time_outs, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, C: int,
             loss_scales_classifiers: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = TimedClassifierMethods
@@ -186,8 +186,9 @@ class TimedClassifierMethods(TimedOutputMethods, ClassifierMethods):
 
         if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
-                self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, M=self.C,  loss_scales=self.loss_scales_classifiers)
+                self=self, axis_time_outs=axis_time_outs, axis_batch_outs=axis_batch_outs,
+                axis_features_outs=axis_features_outs, axis_models_losses=axis_models_losses,
+                M=self.C,  loss_scales=self.loss_scales_classifiers)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
 

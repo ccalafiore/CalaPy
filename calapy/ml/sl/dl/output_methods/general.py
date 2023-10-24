@@ -240,7 +240,7 @@ class OutputMethods:
 class TimedOutputMethods(OutputMethods):
 
     def __init__(
-            self, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, M: int,
+            self, axis_time_outs, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, M: int,
             loss_scales: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = TimedOutputMethods
@@ -264,12 +264,17 @@ class TimedOutputMethods(OutputMethods):
         if self.axis_features_outs < 0:
             self.axis_features_outs += self.n_axes_outs
 
-        self.axis_time_outs = 0
-        for a in range(0, self.n_axes_outs, 1):
-            if self.axis_time_outs in [self.axis_batch_outs, self.axis_features_outs]:
-                self.axis_time_outs += 1
-            else:
-                break
+        self.axis_time_outs = axis_time_outs
+        if self.axis_time_outs is None:
+            pass
+        elif isinstance(self.axis_time_outs, int):
+            for a in range(0, self.n_axes_outs, 1):
+                if self.axis_time_outs in [self.axis_batch_outs, self.axis_features_outs]:
+                    self.axis_time_outs += 1
+                else:
+                    break
+        else:
+            raise TypeError('axis_time_outs')
 
         self.axes_non_features_outs = np.asarray(
             [a for a in self.axes_outs if a != self.axis_features_outs], dtype='i')
@@ -285,10 +290,11 @@ class TimedOutputMethods(OutputMethods):
             self.axis_models_losses += self.n_axes_losses
 
         self.axis_time_losses = self.axis_time_outs
-        if self.axis_time_outs > self.axis_features_outs:
-            self.axis_time_losses -= 1
-        if self.axis_time_losses >= self.axis_models_losses:
-            self.axis_time_losses += 1
+        if isinstance(self.axis_time_losses, int):
+            if self.axis_time_outs > self.axis_features_outs:
+                self.axis_time_losses -= 1
+            if self.axis_time_losses >= self.axis_models_losses:
+                self.axis_time_losses += 1
 
         self.axis_batch_losses = self.axis_batch_outs
         if self.axis_batch_outs > self.axis_features_outs:
@@ -341,49 +347,55 @@ class TimedOutputMethods(OutputMethods):
 
     def compute_losses_trials(self, losses):
 
-        if self.move_axes_losses_trials:
-
-            if isinstance(losses, torch.Tensor):
-                losses_trials = torch.moveaxis(
-                    input=losses,
-                    source=self.source_axes_losses_trials,
-                    destination=self.destination_axes_losses_trials).tolist()
-            else:
-                losses_trials = np.moveaxis(
-                    a=losses,
-                    source=self.source_axes_losses_trials,
-                    destination=self.destination_axes_losses_trials).tolist()
+        if self.axis_time_losses is None:
+            raise ValueError('self.axis_time_losses')
         else:
-            losses_trials = losses.tolist()
+            if self.move_axes_losses_trials:
 
-        return losses_trials
+                if isinstance(losses, torch.Tensor):
+                    losses_trials = torch.moveaxis(
+                        input=losses,
+                        source=self.source_axes_losses_trials,
+                        destination=self.destination_axes_losses_trials).tolist()
+                else:
+                    losses_trials = np.moveaxis(
+                        a=losses,
+                        source=self.source_axes_losses_trials,
+                        destination=self.destination_axes_losses_trials).tolist()
+            else:
+                losses_trials = losses.tolist()
+
+            return losses_trials
 
     def compute_outs_trials(self, outs):
 
-        M = len(outs)
-
-        if isinstance(outs[0], torch.Tensor):
-            if self.move_axes_outs_trials:
-                outs_trials = torch.cat([
-                    torch.moveaxis(
-                        input=outs[m],
-                        source=self.source_axes_outs_trials,
-                        destination=self.destination_axes_outs_trials) for m in range(0, M, 1)],
-                    dim=self.axis_features_outs_trials).tolist()
-            else:
-                outs_trials = torch.cat(
-                    outs, dim=self.axis_features_outs_trials).tolist()
+        if self.axis_time_outs is None:
+            raise ValueError('self.axis_time_outs')
         else:
-            if self.move_axes_outs_trials:
+            M = len(outs)
 
-                outs_trials = np.concatenate([
-                    np.moveaxis(
-                        a=outs[m],
-                        source=self.source_axes_outs_trials,
-                        destination=self.destination_axes_outs_trials) for m in range(0, M, 1)],
-                    axis=self.axis_features_outs_trials).tolist()
+            if isinstance(outs[0], torch.Tensor):
+                if self.move_axes_outs_trials:
+                    outs_trials = torch.cat([
+                        torch.moveaxis(
+                            input=outs[m],
+                            source=self.source_axes_outs_trials,
+                            destination=self.destination_axes_outs_trials) for m in range(0, M, 1)],
+                        dim=self.axis_features_outs_trials).tolist()
+                else:
+                    outs_trials = torch.cat(
+                        outs, dim=self.axis_features_outs_trials).tolist()
             else:
-                outs_trials = np.concatenate(
-                    outs, axis=self.axis_features_outs_trials).tolist()
+                if self.move_axes_outs_trials:
 
-        return outs_trials
+                    outs_trials = np.concatenate([
+                        np.moveaxis(
+                            a=outs[m],
+                            source=self.source_axes_outs_trials,
+                            destination=self.destination_axes_outs_trials) for m in range(0, M, 1)],
+                        axis=self.axis_features_outs_trials).tolist()
+                else:
+                    outs_trials = np.concatenate(
+                        outs, axis=self.axis_features_outs_trials).tolist()
+
+            return outs_trials
