@@ -17,7 +17,7 @@ class DQNMethods(TimedOutputMethods):
             movement_type: str = 'proactive',
             same_actions: typing.Union[int, list, tuple, np.ndarray, torch.Tensor, None] = None,
             gamma: typing.Union[int, float] = .999, reward_bias: typing.Union[int, float] = .0,
-            loss_weights_actors: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None) -> None:
+            loss_scales_actors: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None) -> None:
 
         superclass = DQNMethods
         try:
@@ -38,7 +38,7 @@ class DQNMethods(TimedOutputMethods):
             raise TypeError('n_possible_actions')
 
         self.n_agents = self.A = len(self.possible_actions)
-        self.loss_weights_actors = set_loss_weights(M=self.A, loss_weights=loss_weights_actors)
+        self.loss_scales_actors = _set_loss_scales(M=self.A, loss_scales=loss_scales_actors)
 
         self.n_possible_actions = [-1 for a in range(0, self.A, 1)]  # type: list
 
@@ -60,7 +60,7 @@ class DQNMethods(TimedOutputMethods):
         if TimedOutputMethods not in self.superclasses_initiated:
             TimedOutputMethods.__init__(
                 self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
-                axis_models_losses=axis_models_losses, M=self.A, loss_weights=self.loss_weights_actors)
+                axis_models_losses=axis_models_losses, M=self.A, loss_scales=self.loss_scales_actors)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
 
@@ -240,17 +240,17 @@ class DQNMethods(TimedOutputMethods):
     def reduce_value_action_losses(
             self, value_action_losses: typing.Union[torch.Tensor, np.ndarray],
             axes_not_included: typing.Union[int, list, tuple, np.ndarray, torch.Tensor] = None,
-            weighted: bool = False,
-            loss_weights_actors: typing.Union[list, tuple, np.ndarray, torch.Tensor] = None,
-            format_weights: bool = True):
+            scaled: bool = False,
+            loss_scales_actors: typing.Union[list, tuple, np.ndarray, torch.Tensor] = None,
+            format_scales: bool = True):
 
-        if weighted and (loss_weights_actors is None):
-            loss_weights_actors = self.loss_weights_actors
-            format_weights = False
+        if scaled and (loss_scales_actors is None):
+            loss_scales_actors = self.loss_scales_actors
+            format_scales = False
 
         reduced_value_action_losses = self.reduce_losses(
             losses=value_action_losses, axes_not_included=axes_not_included,
-            weighted=weighted, loss_weights=loss_weights_actors, format_weights=format_weights)
+            scaled=scaled, loss_scales=loss_scales_actors, format_scales=format_scales)
 
         return reduced_value_action_losses
 

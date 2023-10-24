@@ -1,9 +1,8 @@
 
-
 import importlib
 
-submodules = ['general', 'classifiers', 'DQNs', 'DQCs']
 
+submodules = ['multi_layers', 'single_layers', 'image', 'model_tools']
 others = []
 __all__ = submodules + others
 

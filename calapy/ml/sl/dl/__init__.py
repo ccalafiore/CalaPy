@@ -1,10 +1,8 @@
 
-
 import importlib
 
 
-submodules = ['rl', 'utilities']
-
+submodules = ['datasets', 'models', 'output_methods', 'devices', 'preprocess', 'tensors', 'test', 'train']
 others = []
 __all__ = submodules + others
 

@@ -5,51 +5,71 @@ from .... import maths as cp_maths
 import numpy as np
 import typing
 
-__all__ = ['OutputMethods', 'TimedOutputMethods', 'set_loss_weights']
+__all__ = ['OutputMethods', 'TimedOutputMethods', '_set_loss_scales']
 
 
-def set_loss_weights(
-        M: int, loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None):
+def _set_loss_scales(M, loss_scales=None):
+    """
 
-    if loss_weights is None:
-        loss_weights = [1.0 / M for m in range(M)]
-    elif isinstance(loss_weights, int):
-        loss_weights = [float(loss_weights)]
-    elif isinstance(loss_weights, float):
-        loss_weights = [loss_weights]
-    elif isinstance(loss_weights, list):
-        loss_weights = loss_weights
-    elif isinstance(loss_weights, tuple):
-        loss_weights = list(loss_weights)
-    elif isinstance(loss_weights, (np.ndarray, torch.Tensor)):
-        loss_weights = loss_weights.tolist()
+
+    :param M:
+    :type M: int
+    :param loss_scales:
+    :type loss_scales: list[float | int  | None] | tuple[float | int  | None] |
+                       np.ndarray[float | int  | None] | torch.Tensor[float | int  | None] |
+                       float | int  | None
+    :rtype: list[float]
+
+    """
+
+    if isinstance(M, int):
+        if M < 1:
+            raise ValueError('M < 1')
     else:
-        raise TypeError('loss_weights')
+        raise TypeError('M')
 
-    if len(loss_weights) != M:
-        if len(loss_weights) == 1:
-            loss_weights = [float(loss_weights[0]) for m in range(M)]
+    if loss_scales is None:
+        loss_scales = [1.0 for m in range(0, M, 1)]
+    if isinstance(loss_scales, int):
+        loss_scales = [float(loss_scales)]
+    elif isinstance(loss_scales, float):
+        loss_scales = [loss_scales]
+    elif isinstance(loss_scales, list):
+        loss_scales = loss_scales
+    elif isinstance(loss_scales, tuple):
+        loss_scales = list(loss_scales)
+    elif isinstance(loss_scales, (np.ndarray, torch.Tensor)):
+        loss_scales = loss_scales.tolist()
+    else:
+        raise TypeError('loss_scales')
+
+    M_tmp = len(loss_scales)
+
+    if M_tmp != M:
+        if M_tmp == 1:
+            loss_scales = [loss_scales[0] for m in range(0, M, 1)]
         else:
-            raise ValueError('M != len(loss_weights)')
+            raise ValueError('M and loss_scales ')
 
     for m in range(0, M, 1):
-        if loss_weights[m] < 0:
-            raise ValueError('loss_weights[' + str(m) + ']')
+        if loss_scales[m] is None:
+            loss_scales[m] = 1.0
+        elif isinstance(loss_scales[m], (int, float)):
+            if isinstance(loss_scales[m], int):
+                loss_scales[m] = float(loss_scales[m])
+            if loss_scales[m] < 0.0:
+                raise ValueError('loss_scales[' + str(m) + ']')
+        else:
+            raise TypeError('loss_scales[' + str(m) + ']')
 
-    sum_loss_weights = sum(loss_weights)
-    if sum_loss_weights == 0.0:
-        loss_weights = [0.0 for m in range(0, M, 1)]
-    else:
-        loss_weights = [(loss_weights[m] / sum_loss_weights) for m in range(0, M, 1)]
-
-    return loss_weights
+    return loss_scales
 
 
 class OutputMethods:
 
     def __init__(
             self, axis_features_outs: int, axis_models_losses: int, M: int,
-            loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
+            loss_scales: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = OutputMethods
         try:
@@ -85,7 +105,7 @@ class OutputMethods:
         else:
             raise TypeError('M')
 
-        self.loss_weights = set_loss_weights(M=self.M, loss_weights=loss_weights)
+        self.loss_scales = _set_loss_scales(M=self.M, loss_scales=loss_scales)
 
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
@@ -93,8 +113,8 @@ class OutputMethods:
     def reduce_losses(
             self, losses: typing.Union[torch.Tensor, np.ndarray],
             axes_not_included: typing.Union[int, list, tuple, np.ndarray, torch.Tensor] = None,
-            weighted: bool = False, loss_weights: typing.Union[list, tuple, np.ndarray, torch.Tensor] = None,
-            format_weights: bool = True):
+            scaled: bool = False, loss_scales: typing.Union[list, tuple, np.ndarray, torch.Tensor] = None,
+            format_scales: bool = True):
 
         n_axes_losses = losses.ndim
         if axes_not_included is None:
@@ -109,13 +129,13 @@ class OutputMethods:
             raise TypeError('axes_not_included')
         n_axes_not = len(axes_not)
 
-        if weighted:
+        if scaled:
 
             M = losses.shape[self.axis_models_losses]
-            if loss_weights is None:
-                loss_weights = self.loss_weights
-            elif format_weights:
-                loss_weights = set_loss_weights(M=M, loss_weights=loss_weights)
+            if loss_scales is None:
+                loss_scales = self.loss_scales
+            elif format_scales:
+                loss_scales = _set_loss_scales(M=M, loss_scales=loss_scales)
 
             if n_axes_not == 0:
                 axes_reduced = [
@@ -123,7 +143,7 @@ class OutputMethods:
 
                 reduced_losses = torch.mean(losses, dim=axes_reduced, keepdim=False)
                 for m in range(0, M, 1):
-                    reduced_losses[m] *= loss_weights[m]
+                    reduced_losses[m] *= loss_scales[m]
                 reduced_losses = torch.sum(reduced_losses)
 
             elif self.axis_models_losses in axes_not:
@@ -147,7 +167,7 @@ class OutputMethods:
                         for a in range(0, reduced_losses.ndim, 1)]  # type: list
                     for m in range(0, M, 1):
                         indexes_losses[new_axis_models_losses] = m
-                        reduced_losses[tuple(indexes_losses)] *= loss_weights[m]
+                        reduced_losses[tuple(indexes_losses)] *= loss_scales[m]
                     reduced_losses = torch.sum(
                         reduced_losses, dim=new_axis_models_losses, keepdim=False)
 
@@ -157,7 +177,7 @@ class OutputMethods:
                     for m in range(0, M, 1):
                         indexes_losses[self.axis_models_losses] = m
 
-                        reduced_losses[tuple(indexes_losses)] *= loss_weights[m]
+                        reduced_losses[tuple(indexes_losses)] *= loss_scales[m]
 
                     reduced_losses = torch.sum(
                         reduced_losses, dim=self.axis_models_losses, keepdim=False)
@@ -221,7 +241,7 @@ class TimedOutputMethods(OutputMethods):
 
     def __init__(
             self, axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int, M: int,
-            loss_weights: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
+            loss_scales: typing.Union[None, int, float, list, tuple, np.ndarray, torch.Tensor] = None) -> None:
 
         superclass = TimedOutputMethods
         try:
@@ -281,7 +301,7 @@ class TimedOutputMethods(OutputMethods):
         if OutputMethods not in self.superclasses_initiated:
             OutputMethods.__init__(
                 self=self, axis_features_outs=self.axis_features_outs,
-                axis_models_losses=self.axis_models_losses, M=M, loss_weights=loss_weights)
+                axis_models_losses=self.axis_models_losses, M=M, loss_scales=loss_scales)
             if OutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(OutputMethods)
 

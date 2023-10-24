@@ -1,8 +1,10 @@
 
+
 import importlib
 
 
-submodules = ['rl', 'sl']
+submodules = ['dqc', 'dqn']
+
 others = []
 __all__ = submodules + others
 
