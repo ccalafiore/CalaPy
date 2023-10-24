@@ -2,7 +2,7 @@
 
 import importlib
 
-submodules = ['general', 'classifiers']
+submodules = ['classifiers']
 
 others = []
 __all__ = submodules + others

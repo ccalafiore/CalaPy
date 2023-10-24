@@ -2,22 +2,33 @@
 
 import copy
 import torch
-from .general import *
+from ....sl.dl.output_methods.general import *
 import numpy as np
 import typing
 
-__all__ = ['DQNMethods']
+__all__ = ['DQNMethods', 'TimedDQNMethods']
 
 
-class DQNMethods(TimedOutputMethods):
+class DQNMethods(OutputMethods):
 
     def __init__(
-            self, possible_actions: [list, tuple],
-            axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int,
-            movement_type: str = 'proactive',
-            same_actions: typing.Union[int, list, tuple, np.ndarray, torch.Tensor, None] = None,
-            gamma: typing.Union[int, float] = .999, reward_bias: typing.Union[int, float] = .0,
-            loss_scales_actors: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None) -> None:
+            self, axis_features_outs, axis_models_losses,
+            possible_actions, action_selection_type='active', same_indexes_actions=None,
+            gamma=.999, reward_bias=.0, loss_scales_actors=None):
+
+        """
+
+        :type axis_features_outs: int
+        :type axis_models_losses: int
+        :type possible_actions: list[list[int | float] | tuple[int | float]] |
+                                tuple[list[int | float] | tuple[int | float]]
+        :type action_selection_type: str
+        :type same_indexes_actions: int | list | tuple | np.ndarray | torch.Tensor | None
+        :type gamma: int | float
+        :type reward_bias: int | float
+        :type loss_scales_actors: list[int | float] | tuple[int | float] |
+                                  np.ndarray[int | float] | torch.Tensor[int | float] | float | int | None
+        """
 
         superclass = DQNMethods
         try:
@@ -58,33 +69,33 @@ class DQNMethods(TimedOutputMethods):
         self.n_possible_actions = tuple(self.n_possible_actions)
 
         if TimedOutputMethods not in self.superclasses_initiated:
-            TimedOutputMethods.__init__(
-                self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
+            OutputMethods.__init__(
+                self=self, axis_features_outs=axis_features_outs,
                 axis_models_losses=axis_models_losses, M=self.A, loss_scales=self.loss_scales_actors)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
 
-        if isinstance(movement_type, str):
-            if movement_type.lower() in ['proactive', 'random', 'same']:
-                self.movement_type = movement_type.lower()
+        if isinstance(action_selection_type, str):
+            if action_selection_type.lower() in ['active', 'random', 'same']:
+                self.action_selection_type = action_selection_type.lower()
             else:
-                raise ValueError('movement_type')
+                raise ValueError('action_selection_type')
         else:
-            raise TypeError('movement_type')
+            raise TypeError('action_selection_type')
 
-        if self.movement_type == 'same':
-            if isinstance(same_actions, int):
-                self.same_actions = [same_actions]  # type: list
-            elif isinstance(same_actions, list):
-                self.same_actions = same_actions
-            elif isinstance(same_actions, tuple):
-                self.same_actions = list(same_actions)
-            elif isinstance(same_actions, (np.ndarray, torch.Tensor)):
-                self.same_actions = same_actions.tolist()
+        if self.action_selection_type == 'same':
+            if isinstance(same_indexes_actions, int):
+                self.same_indexes_actions = [same_indexes_actions]  # type: list
+            elif isinstance(same_indexes_actions, list):
+                self.same_indexes_actions = same_indexes_actions
+            elif isinstance(same_indexes_actions, tuple):
+                self.same_indexes_actions = list(same_indexes_actions)
+            elif isinstance(same_indexes_actions, (np.ndarray, torch.Tensor)):
+                self.same_indexes_actions = same_indexes_actions.tolist()
             else:
-                raise TypeError('same_actions')
+                raise TypeError('same_indexes_actions')
         else:
-            self.same_actions = same_actions
+            self.same_indexes_actions = same_indexes_actions
 
         self.gamma = gamma
 
@@ -96,7 +107,13 @@ class DQNMethods(TimedOutputMethods):
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
-    def sample_action(self, values_actions: [list, torch.Tensor], epsilon=.1):
+    def sample_action(self, values_actions, epsilon=.1):
+
+        """
+
+        :type values_actions: list | torch.Tensor
+        :type epsilon: float
+        """
 
         # todo: forward only n non-random actions
 
@@ -105,15 +122,6 @@ class DQNMethods(TimedOutputMethods):
         else:
             device = values_actions[0].device
 
-        # 1)
-        # shape_actions = np.asarray(x_t.shape, dtype='i')
-        # shape_actions = shape_actions[
-        #     np.arange(0, len(shape_actions), 1, dtype='i') != self.axis_features_outs].tolist()
-        # 2)
-        # shape_actions = list(x_t.shape)
-        # shape_actions[self.axis_features_outs] = 1
-        # 3)
-        # shape_actions = [x_t.shape[a] for a in range(0, x_t.ndim, 1) if a != self.axis_features_outs]
         A = len(values_actions)
         shape_actions = self.compute_shape_losses(values_actions)
 
@@ -126,7 +134,7 @@ class DQNMethods(TimedOutputMethods):
 
         actions = torch.empty(shape_actions, dtype=torch.int64, device=device, requires_grad=False)
 
-        if self.movement_type == 'proactive':
+        if self.action_selection_type == 'active':
 
             mask_randoms = torch.rand(
                 shape_actions_a, out=None, dtype=None, layout=torch.strided,
@@ -151,7 +159,7 @@ class DQNMethods(TimedOutputMethods):
                     # values_actions[a].max(dim=self.axis_features_outs, keepdim=True)[1][mask_greedy])
                     values_actions[a].max(dim=self.axis_features_outs, keepdim=False)[1][mask_greedy])
 
-        elif self.movement_type == 'random':
+        elif self.action_selection_type == 'random':
 
             for a in range(0, A, 1):
 
@@ -162,7 +170,7 @@ class DQNMethods(TimedOutputMethods):
                     low=0, high=self.n_possible_actions[a], size=shape_actions_a,
                     generator=None, dtype=torch.int64, device=device, requires_grad=False)
 
-        elif self.movement_type == 'same':
+        elif self.action_selection_type == 'same':
 
             for a in range(0, A, 1):
 
@@ -170,10 +178,10 @@ class DQNMethods(TimedOutputMethods):
                 tuple_indexes_actions = tuple(indexes_actions)
 
                 actions[tuple_indexes_actions] = torch.full(
-                    size=shape_actions_a, fill_value=self.same_actions[a],
+                    size=shape_actions_a, fill_value=self.same_indexes_actions[a],
                     dtype=torch.int64, device=device, requires_grad=False)
         else:
-            raise ValueError('self.movement_type')
+            raise ValueError('self.action_selection_type')
 
         return actions
 
@@ -254,25 +262,6 @@ class DQNMethods(TimedOutputMethods):
 
         return reduced_value_action_losses
 
-    def remove_last_values_actions(self, values_actions: list):
-
-        if self.axis_time_outs is None:
-            raise ValueError('self.axis_time_outs')
-        else:
-            A = len(values_actions)
-            values_actions_out = [None for a in range(0, A, 1)]
-
-            for a in range(A):
-                tuple_indexes_a = tuple(
-                    [slice(0, values_actions[a].shape[d], 1)
-                     if d != self.axis_time_outs
-                     else slice(0, values_actions[a].shape[d] - 1, 1)
-                     for d in range(0, values_actions[a].ndim, 1)])
-
-                values_actions_out[a] = values_actions[a][tuple_indexes_a]
-
-        return values_actions_out
-
     def compute_n_selected_actions(
             self, selected_actions, axes_not_included: typing.Union[int, list, tuple, np.ndarray, torch.Tensor] = None):
 
@@ -302,3 +291,76 @@ class DQNMethods(TimedOutputMethods):
                 deltas = deltas.numpy()
 
         return deltas
+
+
+class TimedDQNMethods(DQNMethods, TimedOutputMethods):
+
+    def __init__(
+            self,
+            axis_batch_outs, axis_features_outs, axis_models_losses,
+            possible_actions, action_selection_type='active', same_indexes_actions=None,
+            gamma=.999, reward_bias=.0, loss_scales_actors=None):
+
+        """
+
+        :type axis_batch_outs: int
+        :type axis_features_outs: int
+        :type axis_models_losses: int
+        :type possible_actions: list[list[int | float] | tuple[int | float]] |
+                                tuple[list[int | float] | tuple[int | float]]
+        :type action_selection_type: str
+        :type same_indexes_actions: int | list | tuple | np.ndarray | torch.Tensor | None
+        :type gamma: int | float
+        :type reward_bias: int | float
+        :type loss_scales_actors: list[int | float] | tuple[int | float] |
+                                  np.ndarray[int | float] | torch.Tensor[int | float] | float | int | None
+        """
+
+        superclass = TimedDQNMethods
+        try:
+            # noinspection PyUnresolvedReferences
+            self.superclasses_initiated
+        except AttributeError:
+            self.superclasses_initiated = []
+        except NameError:
+            self.superclasses_initiated = []
+
+        if DQNMethods not in self.superclasses_initiated:
+            DQNMethods.__init__(
+                self=self, axis_features_outs=axis_features_outs, axis_models_losses=axis_models_losses,
+                possible_actions=possible_actions, action_selection_type=action_selection_type,
+                same_indexes_actions=same_indexes_actions,
+                gamma=gamma, reward_bias=reward_bias, loss_scales_actors=loss_scales_actors)
+            if DQNMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(DQNMethods)
+
+        if TimedOutputMethods not in self.superclasses_initiated:
+            TimedOutputMethods.__init__(
+                self=self, axis_batch_outs=axis_batch_outs, axis_features_outs=axis_features_outs,
+                axis_models_losses=axis_models_losses, M=self.A, loss_scales=self.loss_scales_actors)
+            if TimedOutputMethods not in self.superclasses_initiated:
+                self.superclasses_initiated.append(TimedOutputMethods)
+
+        if superclass not in self.superclasses_initiated:
+            self.superclasses_initiated.append(superclass)
+
+    def remove_last_values_actions(self, values_actions: list):
+
+        if self.axis_time_outs is None:
+            raise ValueError('self.axis_time_outs')
+        else:
+            A = len(values_actions)
+            values_actions_out = [None for a in range(0, A, 1)]
+
+            for a in range(A):
+                tuple_indexes_a = tuple(
+                    [slice(0, values_actions[a].shape[d], 1)
+                     if d != self.axis_time_outs
+                     else slice(0, values_actions[a].shape[d] - 1, 1)
+                     for d in range(0, values_actions[a].ndim, 1)])
+
+                values_actions_out[a] = values_actions[a][tuple_indexes_a]
+
+        return values_actions_out
+
+

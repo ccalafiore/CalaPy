@@ -3,12 +3,35 @@
 import torch
 import typing
 import numpy as np
-from . import no_task
-from ...output_methods.features import DQCs
+from ....sl.dl.models.multi_layers.homo.rnns import SharedRNNAndIndRNNsAndIndFCNNs
+
+class RecurrentDQN1(SharedRNNAndIndRNNsAndIndFCNNs, DQCs.DQCMethods):
+
+    def __init__(
+            self, type_name, n_features_shared_rnn_layers, n_features_private_rnn_layers, n_features_private_fc_layers,
+            biases_shared_rnn_layers=True, biases_private_rnn_layers=True, biases_private_fc_layers=True,
+            axis_features=None, axis_time=None, h_sigma=0.1, nonlinearity='tanh',
+            device=None, dtype=None):
+
+        pass
 
 
-# class DQC(no_task.LSTMSequentialParallelFCLs, DQCs.DQCMethods):
-class DQC(DQCs.DQCMethods):
+class RecurrentDQN3(SharedRNNAndIndRNNsAndIndFCNNs, DQCs.DQCMethods):
+
+    def __init__(
+            self, type_name,
+            n_features_shared_rnn_layers, n_features_private_rnn_layers, n_features_private_fc_layers,
+            biases_shared_rnn_layers=True, biases_private_rnn_layers=True, biases_private_fc_layers=True,
+
+            possible_actions: [list, tuple],
+            axis_batch_outs: int, axis_features_outs: int, axis_models_losses: int,
+            movement_type: str = 'proactive',
+            same_actions: typing.Union[int, list, tuple, np.ndarray, torch.Tensor, None] = None,
+            gamma: typing.Union[int, float] = .999, reward_bias: typing.Union[int, float] = .0,
+            loss_scales_actors: typing.Union[int, float, list, tuple, np.ndarray, torch.Tensor, None] = None)
+
+
+class RecurrentDQN2(SharedRNNAndIndRNNsAndIndFCNNs, DQCs.DQCMethods):
 
     def __init__(
             self,
@@ -43,8 +66,8 @@ class DQC(DQCs.DQCMethods):
         except NameError:
             self.superclasses_initiated = []
 
-        if no_task.LSTMSequentialParallelFCLs not in self.superclasses_initiated:
-            no_task.LSTMSequentialParallelFCLs.__init__(
+        if SharedRNNAndIndRNNsAndIndFCNNs not in self.superclasses_initiated:
+            SharedRNNAndIndRNNsAndIndFCNNs.__init__(
                 self=self,
                 n_features_inputs_lstm=n_features_inputs_lstm,
                 n_features_outs_lstm=n_features_outs_lstm,
@@ -60,8 +83,8 @@ class DQC(DQCs.DQCMethods):
                 return_hc=return_hc,
                 device=device)
 
-            if no_task.LSTMSequentialParallelFCLs not in self.superclasses_initiated:
-                self.superclasses_initiated.append(no_task.LSTMSequentialParallelFCLs)
+            if SharedRNNAndIndRNNsAndIndFCNNs not in self.superclasses_initiated:
+                self.superclasses_initiated.append(SharedRNNAndIndRNNsAndIndFCNNs)
 
         self.axis_time_inputs = self.lstm.axis_time_inputs
         self.axis_batch_inputs = self.lstm.axis_batch_inputs

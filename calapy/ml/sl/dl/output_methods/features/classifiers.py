@@ -1,7 +1,7 @@
 
 
 import torch as torch
-from .general import *
+from ..general import *
 import numpy as np
 import typing
 

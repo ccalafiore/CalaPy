@@ -2,7 +2,7 @@
 
 import importlib
 
-submodules = ['features']
+submodules = ['features', 'general']
 
 others = []
 __all__ = submodules + others
