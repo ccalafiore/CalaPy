@@ -193,9 +193,15 @@ class OutputMethods:
 
         return reduced_losses
 
-    def compute_n_losses(
-            self, losses: torch.Tensor,
-            axes_not_included: typing.Union[int, list, tuple, np.ndarray, torch.Tensor] = None):
+    def compute_n_losses(self, losses, axes_not_included=None):
+
+        """
+
+        :type losses: np.ndarray | torch.Tensor
+        :type axes_not_included: int | list | tuple | np.ndarray | torch.Tensor
+
+        :rtype:
+        """
 
         n_axes_losses = losses.ndim
         if axes_not_included is None:
