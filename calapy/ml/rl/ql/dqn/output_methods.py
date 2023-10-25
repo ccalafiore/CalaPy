@@ -418,7 +418,7 @@ class DQNMethods(OutputMethods):
         else:
             raise TypeError('batch_size_of_val')
 
-        tot_observations_per_epoch = {
+        tot_observations_per_phase = {
             phases_name_p: n_batches_per_phase[phases_name_p] * batch_size[phases_name_p]
             for phases_name_p in phases_names}
 
@@ -493,7 +493,7 @@ class DQNMethods(OutputMethods):
             # running_n_selected_actions_e = 0  # todo
 
             env_iterator = cp_rl_utilities.EnvironmentsIterator(
-                tot_observations_per_epoch=tot_observations_per_epoch['training'])
+                tot_observations_per_epoch=tot_observations_per_phase['training'])
 
             for environment_eb in env_iterator:
 
