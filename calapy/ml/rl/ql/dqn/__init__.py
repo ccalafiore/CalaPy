@@ -1,12 +1,16 @@
 
 
-import importlib
+# import importlib
 
 
-submodules = ['models', 'output_methods']
+# submodules = ['models', 'output_methods']
+#
+# others = []
+# __all__ = submodules + others
+#
+# for sub_module_m in submodules:
+#     importlib.import_module(name='.' + sub_module_m, package=__package__)
 
-others = []
-__all__ = submodules + others
+from .output_methods import *
 
-for sub_module_m in submodules:
-    importlib.import_module(name='.' + sub_module_m, package=__package__)
+__all__ = ['DQNMethods', 'TimedDQNMethods']

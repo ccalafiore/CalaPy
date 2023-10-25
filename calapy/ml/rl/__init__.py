@@ -3,7 +3,7 @@
 import importlib
 
 
-submodules = ['ql', 'utilities']
+submodules = ['ql']
 
 others = []
 __all__ = submodules + others

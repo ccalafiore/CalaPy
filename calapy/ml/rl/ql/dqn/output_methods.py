@@ -374,8 +374,7 @@ class DQNMethods(OutputMethods):
             return len(self.states)
 
     def train(
-            self, model, environment, optimizer,
-            U=10, E=None,
+            self, model, environment, optimizer, is_recurrent=False, U=10, E=None,
             n_batches_per_train_phase=100, batch_size_of_train=100,
             n_batches_per_val_phase=1000, batch_size_of_val=10,
             epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05,
@@ -422,8 +421,6 @@ class DQNMethods(OutputMethods):
             phases_name_p: n_batches_per_phase[phases_name_p] * batch_size[phases_name_p]
             for phases_name_p in phases_names}
 
-        if model.training:
-            model.eval()
         model.freeze()
         torch.set_grad_enabled(False)
 
@@ -487,39 +484,36 @@ class DQNMethods(OutputMethods):
             # Each Training Epoch has a training and a validation phase
             # training phase
 
-            running_loss_e = 0.0
-            running_loss_e = 0.0
 
-            # running_n_selected_actions_e = 0  # todo
+            model.train()
+
+            running_loss_e = 0.0
 
             env_iterator = cp_rl_utilities.EnvironmentsIterator(
                 tot_observations_per_epoch=tot_observations_per_phase['training'])
 
-            for environment_eb in env_iterator:
+            for i in env_iterator:
 
-                hc_ebit = None, None  # todo
+                hc_eit = None
 
-                t = 0
-                for observations_ebit in environment_eb:
+                for t, observation_eit in environment['training']:
 
-                    state_ebit = observations_ebit, hc_ebit
+                    if is_recurrent:
+                        if hc_eit is None:
+                            hc_eit = model.init_h(batch_shape=model.get_batch_shape(input_shape=observation_eit.shape))
+                        state_eit = observation_eit, hc_eit
+                        values_actions_eit, hc_eit = model(x=state_eit[0], h=state_eit[1])
+                    else:
+                        state_eit = observation_eit
+                        values_actions_eit, hc_eit = model(x=state_eit)
 
-                    outs_ebit, hc_ebit = model(x=state_ebit)
-
-                    action_ebit = model.sample_action(values_actions=values_actions_ebit, epsilon=epsilon)
-
-                    rewards_ebt = None
+                    action_eit = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
 
                     replay_memory.put(state=state_ebt, action=action_ebt, next_state=None, reward=rewards_ebt)
 
                     delta_ebt = model.compute_deltas(action_ebt)
 
                     environments_eb.step(delta_ebt)
-
-                    t += 1
-
-                    if t >= T:
-                        break
 
                 replay_memory.actions[-1] = None
                 # replay_memory.actions.pop()
@@ -547,7 +541,6 @@ class DQNMethods(OutputMethods):
                 # track history
                 torch.set_grad_enabled(True)
                 model.unfreeze()
-                model.train()
 
                 outs_eb, hc_eb = model(x=states_eb)
                 values_actions_eb, predictions_classes_eb = model.split(outs_eb)
@@ -579,7 +572,6 @@ class DQNMethods(OutputMethods):
                 scaled_loss_eb.backward()
                 optimizer.step()
 
-                model.eval()
                 model.freeze()
                 torch.set_grad_enabled(False)
 
@@ -721,6 +713,8 @@ class DQNMethods(OutputMethods):
                 epsilon = epsilon_end
 
             # validation phase
+
+            model.eval()
 
             running_unscaled_loss_e = 0.0
             running_scaled_loss_e = 0.0
