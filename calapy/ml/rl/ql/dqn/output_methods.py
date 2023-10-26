@@ -20,7 +20,7 @@ class DQNMethods(OutputMethods):
 
     def __init__(
             self, axis_features_outs, axis_models_losses,
-            possible_actions, action_selection_type='active', same_indexes_actions=None,
+            possible_actions, action_selection_type='active', same_indexes_actions=None, is_recurrent=False,
             gamma=0.999, reward_bias=0.0, loss_scales_actors=None):
 
         """
@@ -31,6 +31,7 @@ class DQNMethods(OutputMethods):
                                 tuple[list[int | float] | tuple[int | float]]
         :type action_selection_type: str
         :type same_indexes_actions: int | list | tuple | np.ndarray | torch.Tensor | None
+        :type is_recurrent: bool
         :type gamma: int | float
         :type reward_bias: int | float
         :type loss_scales_actors: list[int | float] | tuple[int | float] |
@@ -103,6 +104,14 @@ class DQNMethods(OutputMethods):
                 raise TypeError('same_indexes_actions')
         else:
             self.same_indexes_actions = same_indexes_actions
+
+
+        if is_recurrent is None:
+            self.is_recurrent = False
+        elif isinstance(is_recurrent, bool):
+            self.is_recurrent = is_recurrent
+        else:
+            raise TypeError('is_recurrent')
 
         self.gamma = gamma
 
@@ -260,9 +269,9 @@ class DQNMethods(OutputMethods):
 
 
         :type value_action_losses: torch.Tensor | np.ndarray
-        :type axes_not_included: int | list | tuple | np.ndarray | torch.Tensor
+        :type axes_not_included: int | list | tuple | np.ndarray | torch.Tensor | None
         :type scaled: bool
-        :type loss_scales_actors: list | tuple | np.ndarray | torch.Tensor
+        :type loss_scales_actors: list | tuple | np.ndarray | torch.Tensor | None
         :type format_scales: bool
 
         :rtype:
@@ -283,7 +292,7 @@ class DQNMethods(OutputMethods):
         """
 
         :type selected_actions: np.ndarray | torch.Tensor
-        :type axes_not_included: int | list | tuple | np.ndarray | torch.Tensor
+        :type axes_not_included: int | list | tuple | np.ndarray | torch.Tensor | None
 
         :rtype:
         """
@@ -335,23 +344,44 @@ class DQNMethods(OutputMethods):
             else:
                 raise TypeError('batch_size')
 
-            if isinstance(is_recurrent, bool):
+            if is_recurrent is None:
+                self.is_recurrent = False
+            elif isinstance(is_recurrent, bool):
                 self.is_recurrent = is_recurrent
             else:
                 raise TypeError('is_recurrent')
 
-            self.current_len = len(self.states)
+            self.current_len = 0
 
 
-        def add(self, state=None, action=None, reward=None, next_state=None):
+        def add(self, states=None, actions=None, rewards=None, next_states=None):
 
-            self.states += state
 
-            self.actions += action
+            n_new_states = len(states)
 
-            self.rewards += reward
+            for a in range(0, n_new_states, 1):
 
-            self.next_states += next_state
+                if states[a] is not None:
+                    self.states.append(states[a])
+
+                    self.actions.append(actions[a])
+
+                    self.rewards.append(rewards[a])
+
+                    if next_states[a] is None:
+
+                        if self.is_recurrent:
+                            self.next_states.append([
+                                torch.zeros(
+                                    size=states[a][0].shape, device=self.states[a][0].device,
+                                    dtype=states[a][0].dtype, requires_grad=False),
+                                next_states[a][1]])
+                        else:
+                            self.next_states.append(torch.zeros(
+                                size=states[a][0].shape, device=self.states[a][0].device,
+                                dtype=states[a][0].dtype, requires_grad=False))
+                    else:
+                        self.next_states.append(next_states[a])
 
             self.current_len = len(self.states)
 
@@ -385,30 +415,33 @@ class DQNMethods(OutputMethods):
             else:
                 indexes = np.random.choice(a=np.arange(0, self.current_len, 1), size=[self.batch_size], replace=False)
 
+            states = []
+            actions = []
+            rewards = []
+            next_states = []
+            for i in indexes:
+                states.append(self.states.pop(i))
+                actions.append(self.actions.pop(i))
+                rewards.append(self.rewards.pop(i))
+                next_states.append(self.next_states.pop(i))
 
+            self.current_len = len(self.states)
 
             if self.is_recurrent:
-                states = [torch.cat([self.states[i][0] for i in indexes], dim=0), torch.cat([self.states[i][1] for i in indexes], dim=0)]
+                states = [
+                    torch.cat([states[i][0] for i in range(0, self.batch_size, 1)], dim=0),
+                    torch.cat([states[i][1] for i in range(0, self.batch_size, 1)], dim=0)]
 
                 next_states = [
-                    torch.cat([torch.zeros(
-                        size=self.states[i][0].shape, device=self.states[i][0].device, dtype=self.states[i][0].dtype,
-                        requires_grad=False)
-                               if self.next_states[i][0] is None else self.next_states[i][0] for i in indexes], dim=0),
-                    torch.cat([self.next_states[i][1] for i in indexes], dim=0)]
-                # todo: lstm
+                    torch.cat([next_states[i][0] for i in range(0, self.batch_size, 1)], dim=0),
+                    torch.cat([next_states[i][1] for i in range(0, self.batch_size, 1)], dim=0)]
+                # todo: if lstm
             else:
-                states = torch.cat([self.states[i] for i in indexes], dim=0)
+                states = torch.cat(states, dim=0)
+                next_states = torch.cat(next_states, dim=0)
 
-                next_states = torch.cat([
-                    torch.zeros(
-                    size=self.states[i].shape, device=self.states[i].device, dtype=self.states[i].dtype,
-                    requires_grad=False)
-                    if self.next_states[i] is None else self.next_states[i] for i in indexes], dim=0)
-
-
-            actions = torch.cat([self.actions[i] for i in indexes], dim=0)
-            rewards = torch.cat([self.rewards[i] for i in indexes], dim=0)
+            actions = torch.cat(actions, dim=0)
+            rewards = torch.cat(rewards, dim=0)
 
             return dict(
                 states=states, actions=actions,
@@ -418,7 +451,7 @@ class DQNMethods(OutputMethods):
             return len(self.states)
 
     def train(
-            self, model, environment, optimizer, is_recurrent=False, U=10, E=None,
+            self, model, environment, optimizer, U=10, E=None, min_n_episodes_for_optim=10, min_n_samples_for_optim=1000,
             n_batches_per_train_phase=100, batch_size_of_train=100, max_time_steps_per_train_episode=None,
             n_batches_per_val_phase=1000, batch_size_of_val=10, max_time_steps_per_val_episode=None,
             epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05,
@@ -517,7 +550,8 @@ class DQNMethods(OutputMethods):
         dashes = '-' * n_dashes
         print(dashes)
 
-        replay_memory = self.ReplayMemory()
+        replay_memory = self.ReplayMemory(
+            capacity=100000, batch_size=batch_size['training'], is_recurrent=self.is_recurrent)
 
         lowest_loss = math.inf
         lowest_loss_str = str(lowest_loss)
@@ -547,9 +581,12 @@ class DQNMethods(OutputMethods):
             model.train()
 
             running_loss_e = 0.0
+            running_n_selected_actions_e = 1
 
             env_iterator = cp_rl_utilities.EnvironmentsIterator(
                 tot_observations_per_epoch=tot_observations_per_phase['training'])
+
+            b = 0
 
             for i in env_iterator:
 
@@ -557,6 +594,8 @@ class DQNMethods(OutputMethods):
                 state_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
                 action_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
                 delta_ebt = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
+                # hc_eit = None
+                # state_eit = None
 
                 observation_eit = environment['training'].reset()
 
@@ -564,187 +603,103 @@ class DQNMethods(OutputMethods):
 
                 for t in obs_iterator:
 
-                    for a in range(0, environment['training'].n_platforms, 1):
+                    for a in range(0, len(observation_eit), 1):
 
-                        if observation_eit[a] is not None:
-                            if is_recurrent:
-                                if hc_eit[a] is None:
-                                    hc_eit[a] = model.init_h(batch_shape=model.get_batch_shape(
-                                        input_shape=observation_eit[a].shape))
-                                state_eit[a] = observation_eit[a], hc_eit[a]
-                                values_actions_eita, hc_eit[a] = model(x=state_eit[0], h=state_eit[1])
-                            else:
-                                state_eit[a] = observation_eit[a]
-                                values_actions_eita, hc_eit[a] = model(x=state_eit[a])
-
-                            action_eit[a] = self.sample_action(values_actions=values_actions_eita, epsilon=epsilon)
-
-                            delta_ebt[a] = model.compute_deltas(action_ebt[a])
-                        else:
+                        if observation_eit[a] is None:
+                            hc_eit[a] = None
                             state_eit[a] = None
                             action_eit[a] = None
                             delta_ebt[a] = None
+                        else:
+                            if self.is_recurrent:
+                                if hc_eit[a] is None:
+                                    hc_eit[a] = model.init_h(
+                                        batch_shape=model.get_batch_shape(input_shape=observation_eit[a].shape))
+                                if state_eit[a] is None:
+                                    state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
+                                values_actions_eit, hc_eit[a] = model(x=state_eit[a][0], h=state_eit[a][1])
+                            else:
+                                if state_eit[a] is None:
+                                    state_eit[a] = copy.deepcopy(observation_eit[a])
+                                values_actions_eit = model(x=state_eit[a])
 
-                    next_observation_eit, reward_eit, not_over = environment['training'].step(
+                            action_eit[a] = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
+                            delta_ebt[a] = model.compute_deltas(action_eit[a])
+
+                    next_observation_eit, reward_eit, obs_iterator.not_over = environment['training'].step(
                         actions=delta_ebt)
 
-                    obs_iterator.not_over = all([ob_a is None for ob_a in observation_eit]) or not_over
-
-                    if is_recurrent:
-                        next_state_eit = copy.deepcopy(next_observation_eit, hc_eit)
+                    if next_observation_eit is None:
+                        next_state_eit = None
                     else:
-                        next_state_eit = copy.deepcopy(next_observation_eit)
+                        if self.is_recurrent:
+                            next_state_eit = copy.deepcopy([next_observation_eit, hc_eit])
+                        else:
+                            next_state_eit = copy.deepcopy(next_observation_eit)
 
-                    replay_memory.(state=state_ebt, action=action_ebt, next_state=next_state_eit, reward=rewards_ebt)
+                    replay_memory.add(
+                        states=state_eit, actions=action_eit, next_states=next_state_eit, rewards=reward_eit)
 
+                    observation_eit = next_observation_eit
                     state_eit = copy.deepcopy(next_state_eit)
 
-                replay_memory.actions[-1] = None
-                # replay_memory.actions.pop()
-                # replay_memory.rewards.pop()
+                if i >= min_n_episodes_for_optim:
+                    while (replay_memory.current_len >= min_n_samples_for_optim) and (replay_memory.current_len >= batch_size['training']):
 
-                samples_eb = replay_memory.sample()
-                states_eb = samples_eb['states']
-                states_labels_eb = samples_eb['states_labels']
-                actions_eb = samples_eb['actions']
-                next_states_eb = samples_eb['next_states']
-                rewards_eb = samples_eb['rewards']
-                # non_final_eb = samples_eb['non_final']
+                        samples_eb = replay_memory.sample()
+                        states_eb = samples_eb['states']
+                        actions_eb = samples_eb['actions']
+                        next_states_eb = samples_eb['next_states']
+                        rewards_eb = samples_eb['rewards']
 
-                next_outs_eb, next_hc_eb = model(x=next_states_eb)
+                        if self.is_recurrent:
+                            next_values_actions_eb, next_hc_eb = model(x=next_states_eb)
+                        else:
+                            next_values_actions_eb = model(x=next_states_eb)
 
-                # todo: set rewards_eb to -next_predictions_classes_eb
-                next_values_actions_eb, next_predictions_classes_eb = model.split(next_outs_eb)
+                        expected_values_actions_eb = self.compute_expected_values_actions(
+                            next_values_actions=next_values_actions_eb, rewards=rewards_eb)
 
-                expected_values_actions_eb = model.compute_expected_values_actions(
-                    next_values_actions=next_values_actions_eb, rewards=rewards_eb)
+                        optimizer.zero_grad()
 
-                optimizer.zero_grad()
+                        # forward
+                        # track history
+                        torch.set_grad_enabled(True)
+                        model.unfreeze()
 
-                # forward
-                # track history
-                torch.set_grad_enabled(True)
-                model.unfreeze()
+                        if self.is_recurrent:
+                            values_actions_eb, hc_eb = model(x=states_eb)
+                        else:
+                            values_actions_eb = model(x=states_eb)
 
-                outs_eb, hc_eb = model(x=states_eb)
-                values_actions_eb, predictions_classes_eb = model.split(outs_eb)
+                        values_selected_actions_eb = self.gather_values_selected_actions(
+                            values_actions=values_actions_eb, actions=actions_eb)
 
-                values_actions_eb = model.remove_last_values_actions(values_actions=values_actions_eb)
+                        value_action_losses_eb = self.compute_value_action_losses(
+                            values_selected_actions=values_selected_actions_eb,
+                            expected_values_actions=expected_values_actions_eb)
 
-                values_selected_actions_eb = model.gather_values_selected_actions(
-                    values_actions=values_actions_eb, actions=actions_eb)
+                        scaled_value_action_loss_eb = self.reduce_value_action_losses(
+                            value_action_losses=value_action_losses_eb, axes_not_included=None,
+                            scaled=True, loss_scales_actors=None, format_scales=False)
 
-                value_action_losses_eb = model.compute_value_action_losses(
-                    values_selected_actions=values_selected_actions_eb,
-                    expected_values_actions=expected_values_actions_eb)
+                        scaled_value_action_loss_eb.backward()
+                        optimizer.step()
 
-                class_prediction_losses_eb = model.compute_class_prediction_losses(
-                    predictions_classes=predictions_classes_eb, labels=states_labels_eb)
+                        model.freeze()
+                        torch.set_grad_enabled(False)
 
-                scaled_value_action_loss_eb = model.reduce_value_action_losses(
-                    value_action_losses=value_action_losses_eb, axes_not_included=None,
-                    scaled=True, loss_scales_actors=None, format_scales=False)
+                        n_selected_actions_eb = self.compute_n_selected_actions(
+                            selected_actions=actions_eb, axes_not_included=None)
 
-                scaled_class_prediction_loss_eb = model.reduce_class_prediction_losses(
-                    class_prediction_losses=class_prediction_losses_eb, axes_not_included=None,
-                    scaled=True, loss_scales_classifiers=None, format_scales=False)
+                        running_n_selected_actions_e += n_selected_actions_eb
+                        running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
 
-                scaled_loss_eb = model.compute_multitask_losses(
-                    value_action_loss=scaled_value_action_loss_eb,
-                    class_prediction_loss=scaled_class_prediction_loss_eb, scaled=True)
 
-                scaled_loss_eb.backward()
-                optimizer.step()
+                        env_iterator + batch_size['training']
+                        b += 1
 
-                model.freeze()
-                torch.set_grad_enabled(False)
-
-                unscaled_value_action_loss_eb = model.reduce_value_action_losses(
-                    value_action_losses=value_action_losses_eb, axes_not_included=None,
-                    scaled=False, loss_scales_actors=None, format_scales=False)
-
-                unscaled_class_prediction_loss_eb = model.reduce_class_prediction_losses(
-                    class_prediction_losses=class_prediction_losses_eb, axes_not_included=None,
-                    scaled=False, loss_scales_classifiers=None, format_scales=False)
-
-                unscaled_loss_eb = model.compute_multitask_losses(
-                    value_action_loss=unscaled_value_action_loss_eb,
-                    class_prediction_loss=unscaled_class_prediction_loss_eb, scaled=False)
-
-                n_selected_actions_eb = model.compute_n_selected_actions(
-                    selected_actions=actions_eb, axes_not_included=None)
-
-                # compute accuracy
-                classifications_eb = model.compute_classifications(predictions_classes=predictions_classes_eb)
-                correct_classifications_eb = model.compute_correct_classifications(
-                    classifications=classifications_eb, labels=states_labels_eb)
-                n_corrects_eb = model.compute_n_corrects(
-                    correct_classifications=correct_classifications_eb, axes_not_included=None, keepdim=False)
-                n_classifications_eb = model.compute_n_classifications(
-                    classifications=classifications_eb, axes_not_included=None)
-                n_actions_and_classifications_eb = n_selected_actions_eb + n_classifications_eb
-
-                running_unscaled_loss_e += (unscaled_loss_eb.item() * n_actions_and_classifications_eb)
-                running_scaled_loss_e += (scaled_loss_eb.item() * n_actions_and_classifications_eb)
-
-                running_n_selected_actions_e += n_selected_actions_eb
-                running_unscaled_value_action_loss_e += (unscaled_value_action_loss_eb.item() * n_selected_actions_eb)
-                running_scaled_value_action_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
-
-                running_n_corrects_e += n_corrects_eb
-                running_n_classifications_e += n_classifications_eb
-                running_unscaled_class_prediction_loss_e += (
-                        unscaled_class_prediction_loss_eb.item() * n_classifications_eb)
-                running_scaled_class_prediction_loss_e += (
-                        scaled_class_prediction_loss_eb.item() * n_classifications_eb)
-
-                # compute accuracy for each time point
-                n_corrects_T_eb = model.compute_n_corrects(
-                    correct_classifications=correct_classifications_eb,
-                    axes_not_included=model.axis_time_losses, keepdim=False)
-                n_classifications_T_eb = model.compute_n_classifications(
-                    classifications=classifications_eb, axes_not_included=model.axis_time_losses)
-
-                # compute class prediction losses for each time point
-                unscaled_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
-                    class_prediction_losses=class_prediction_losses_eb, axes_not_included=model.axis_time_losses,
-                    scaled=False, loss_scales_classifiers=None, format_scales=False)
-
-                scaled_class_prediction_losses_T_eb = model.reduce_class_prediction_losses(
-                    class_prediction_losses=class_prediction_losses_eb, axes_not_included=model.axis_time_losses,
-                    scaled=True, loss_scales_classifiers=None, format_scales=False)
-
-                running_n_corrects_T_e += n_corrects_T_eb
-                running_n_classifications_T_e += n_classifications_T_eb
-                running_unscaled_class_prediction_losses_T_e += (
-                        unscaled_class_prediction_losses_T_eb * n_classifications_T_eb)
-                running_scaled_class_prediction_losses_T_e += (
-                        scaled_class_prediction_losses_T_eb * n_classifications_T_eb)
-
-            replay_memory.clear()
-
-            # scheduler.step()
-
-            running_n_actions_and_classifications_e = running_n_selected_actions_e + running_n_classifications_e
-            unscaled_loss_e = running_unscaled_loss_e / running_n_actions_and_classifications_e
-            scaled_loss_e = running_scaled_loss_e / running_n_actions_and_classifications_e
-
-            unscaled_value_action_loss_e = running_unscaled_value_action_loss_e / running_n_selected_actions_e
-            scaled_value_action_loss_e = running_scaled_value_action_loss_e / running_n_selected_actions_e
-
-            unscaled_class_prediction_loss_e = running_unscaled_class_prediction_loss_e / running_n_classifications_e
-            scaled_class_prediction_loss_e = running_scaled_class_prediction_loss_e / running_n_classifications_e
-            accuracy_e = running_n_corrects_e / running_n_classifications_e
-
-            unscaled_class_prediction_losses_T_e = (
-                    running_unscaled_class_prediction_losses_T_e / running_n_classifications_T_e)
-            scaled_class_prediction_losses_T_e = (
-                    running_scaled_class_prediction_losses_T_e / running_n_classifications_T_e)
-            accuracy_T_e = (running_n_corrects_T_e / running_n_classifications_T_e)
-
-            last_unscaled_class_prediction_loss_e = unscaled_class_prediction_losses_T_e[-1].item()
-            last_scaled_class_prediction_loss_e = scaled_class_prediction_losses_T_e[-1].item()
-            last_accuracy_e = accuracy_T_e[-1].item()
+            loss_e = running_loss_e / running_n_selected_actions_e
 
             stats['lines'][e][stats['headers']['Training_Unscaled_Loss']] = unscaled_loss_e
             stats['lines'][e][stats['headers']['Training_Scaled_Loss']] = scaled_loss_e
