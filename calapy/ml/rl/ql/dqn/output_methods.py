@@ -318,7 +318,7 @@ class DQNMethods(OutputMethods):
     class ReplayMemory:
         """A simple replay buffer."""
 
-        def __init__(self, capacity):
+        def __init__(self, capacity, batch_size, is_recurrent):
 
             self.states = []
             self.actions = []
@@ -329,6 +329,18 @@ class DQNMethods(OutputMethods):
                 self.capacity = capacity
             else:
                 raise TypeError('capacity')
+
+            if isinstance(batch_size, int):
+                self.batch_size = batch_size
+            else:
+                raise TypeError('batch_size')
+
+            if isinstance(is_recurrent, bool):
+                self.is_recurrent = is_recurrent
+            else:
+                raise TypeError('is_recurrent')
+
+            self.current_len = len(self.states)
 
 
         def add(self, state=None, action=None, reward=None, next_state=None):
@@ -341,58 +353,66 @@ class DQNMethods(OutputMethods):
 
             self.next_states += next_state
 
+            self.current_len = len(self.states)
+
             self.remove_extras()
 
         def remove_extras(self):
 
-            current_len = len(self.states)
-            n_extras = current_len - self.capacity
+            n_extras = self.current_len - self.capacity
 
             if n_extras > 0:
-                self.states = self.states[slice(n_extras, current_len, 1)]
+                self.states = self.states[slice(n_extras, self.current_len, 1)]
 
-                self.actions = self.actions[slice(n_extras, current_len, 1)]
+                self.actions = self.actions[slice(n_extras, self.current_len, 1)]
 
-                self.rewards = self.rewards[slice(n_extras, current_len, 1)]
+                self.rewards = self.rewards[slice(n_extras, self.current_len, 1)]
 
-                self.next_states = self.next_states[slice(n_extras, current_len, 1)]
+                self.next_states = self.next_states[slice(n_extras, self.current_len, 1)]
+
+                self.current_len = len(self.states)
 
             return None
 
         def clear(self):
-            self.__init__(capacity=self.capacity)
+            self.__init__(capacity=self.capacity, batch_size=self.batch_size, is_recurrent=self.is_recurrent)
             return None
 
         def sample(self):
 
-            T = len(self.states)
-
-            states = torch.cat([s for s in self.states if s is not None], dim=self.axis_time_features)
-
-            states_labels = torch.cat(
-                [self.states_labels[t] for t in range(0, T, 1) if self.states_labels[t] is not None],
-                dim=self.axis_time_actions)
-
-            actions = torch.cat(
-                [self.actions[t] for t in range(0, T, 1) if self.actions[t] is not None],
-                dim=self.axis_time_actions)
-
-            next_states = [n for n in self.next_states if n is not None]
-            if len(next_states) == 0:
-                ind = tuple(
-                    [slice(0, states.shape[d], 1) if d != self.axis_time_features else slice(1, T, 1)
-                     for d in range(0, states.ndim, 1)])
-                next_states = states[ind]
+            if self.batch_size > self.capacity:
+                raise ValueError('self.batch_size > self.capacity')
             else:
-                next_states = torch.cat(next_states, dim=self.axis_time_features)
+                indexes = np.random.choice(a=np.arange(0, self.current_len, 1), size=[self.batch_size], replace=False)
 
-            rewards = torch.cat([r for r in self.rewards if r is not None], dim=self.axis_time_rewards)
 
-            # non_final = torch.cat(self.non_final, dim=self.axis_time)
+
+            if self.is_recurrent:
+                states = [torch.cat([self.states[i][0] for i in indexes], dim=0), torch.cat([self.states[i][1] for i in indexes], dim=0)]
+
+                next_states = [
+                    torch.cat([torch.zeros(
+                        size=self.states[i][0].shape, device=self.states[i][0].device, dtype=self.states[i][0].dtype,
+                        requires_grad=False)
+                               if self.next_states[i][0] is None else self.next_states[i][0] for i in indexes], dim=0),
+                    torch.cat([self.next_states[i][1] for i in indexes], dim=0)]
+                # todo: lstm
+            else:
+                states = torch.cat([self.states[i] for i in indexes], dim=0)
+
+                next_states = torch.cat([
+                    torch.zeros(
+                    size=self.states[i].shape, device=self.states[i].device, dtype=self.states[i].dtype,
+                    requires_grad=False)
+                    if self.next_states[i] is None else self.next_states[i] for i in indexes], dim=0)
+
+
+            actions = torch.cat([self.actions[i] for i in indexes], dim=0)
+            rewards = torch.cat([self.rewards[i] for i in indexes], dim=0)
 
             return dict(
-                states=states, states_labels=states_labels, actions=actions,
-                next_states=next_states, rewards=rewards)  # , non_final=non_final)
+                states=states, actions=actions,
+                next_states=next_states, rewards=rewards)
 
         def __len__(self) -> int:
             return len(self.states)
