@@ -3,7 +3,7 @@
 import math
 
 
-__all__ = ['EnvironmentsIterator']
+__all__ = ['EnvironmentsIterator', 'ObservationsIterator']
 
 
 class EnvironmentsIterator:
@@ -39,3 +39,33 @@ class EnvironmentsIterator:
 
     def count_observations(self, n_new_observations):
         return self + n_new_observations
+
+
+class ObservationsIterator:
+
+    def __init__(self, T=None):
+
+        """
+        :type T: int | None
+        """
+
+        if T is None:
+            self.T = math.inf
+        elif isinstance(T, int):
+            self.T = T
+        else:
+            raise TypeError('T')
+
+    def __iter__(self):
+        self.t = -1
+        self.not_over = True
+        return self
+
+    def __next__(self):
+
+        self.t += 1
+
+        if self.not_over or (self.t < self.T):
+            return self.t
+        else:
+            raise StopIteration

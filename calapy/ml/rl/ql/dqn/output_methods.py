@@ -318,25 +318,49 @@ class DQNMethods(OutputMethods):
     class ReplayMemory:
         """A simple replay buffer."""
 
-        def __init__(self):
+        def __init__(self, capacity):
 
             self.states = []
             self.actions = []
             self.rewards = []
             self.next_states = []
 
-        def append(self, state=None, action=None, reward=None, next_state=None):
+            if isinstance(capacity, int):
+                self.capacity = capacity
+            else:
+                raise TypeError('capacity')
 
-            self.states.append(state)
 
-            self.actions.append(action)
+        def add(self, state=None, action=None, reward=None, next_state=None):
 
-            self.rewards.append(reward)
+            self.states += state
 
-            self.next_states.append(next_state)
+            self.actions += action
+
+            self.rewards += reward
+
+            self.next_states += next_state
+
+            self.remove_extras()
+
+        def remove_extras(self):
+
+            current_len = len(self.states)
+            n_extras = current_len - self.capacity
+
+            if n_extras > 0:
+                self.states = self.states[slice(n_extras, current_len, 1)]
+
+                self.actions = self.actions[slice(n_extras, current_len, 1)]
+
+                self.rewards = self.rewards[slice(n_extras, current_len, 1)]
+
+                self.next_states = self.next_states[slice(n_extras, current_len, 1)]
+
+            return None
 
         def clear(self):
-            self.__init__()
+            self.__init__(capacity=self.capacity)
             return None
 
         def sample(self):
@@ -375,8 +399,8 @@ class DQNMethods(OutputMethods):
 
     def train(
             self, model, environment, optimizer, is_recurrent=False, U=10, E=None,
-            n_batches_per_train_phase=100, batch_size_of_train=100,
-            n_batches_per_val_phase=1000, batch_size_of_val=10,
+            n_batches_per_train_phase=100, batch_size_of_train=100, max_time_steps_per_train_episode=None,
+            n_batches_per_val_phase=1000, batch_size_of_val=10, max_time_steps_per_val_episode=None,
             epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05,
             directory_outputs=None):
 
@@ -420,6 +444,21 @@ class DQNMethods(OutputMethods):
         tot_observations_per_phase = {
             phases_name_p: n_batches_per_phase[phases_name_p] * batch_size[phases_name_p]
             for phases_name_p in phases_names}
+
+        max_time_steps_per_episode = {
+            'training': max_time_steps_per_train_episode, 'validation': max_time_steps_per_val_episode}
+        if max_time_steps_per_episode['training'] is None:
+            max_time_steps_per_episode['training'] = math.inf
+        elif isinstance(max_time_steps_per_episode['training'], int):
+            pass
+        else:
+            raise TypeError('max_time_steps_per_train_episode')
+        if max_time_steps_per_episode['validation'] is None:
+            max_time_steps_per_episode['validation'] = 10
+        elif isinstance(max_time_steps_per_episode['validation'], int):
+            pass
+        else:
+            raise TypeError('max_time_steps_per_val_episode')
 
         model.freeze()
         torch.set_grad_enabled(False)
@@ -494,26 +533,51 @@ class DQNMethods(OutputMethods):
 
             for i in env_iterator:
 
-                hc_eit = None
+                hc_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
+                state_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
+                action_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
+                delta_ebt = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
 
-                for t, observation_eit in environment['training']:
+                observation_eit = environment['training'].reset()
+
+                obs_iterator = cp_rl_utilities.ObservationsIterator(T=max_time_steps_per_episode['training'])
+
+                for t in obs_iterator:
+
+                    for a in range(0, environment['training'].n_platforms, 1):
+
+                        if observation_eit[a] is not None:
+                            if is_recurrent:
+                                if hc_eit[a] is None:
+                                    hc_eit[a] = model.init_h(batch_shape=model.get_batch_shape(
+                                        input_shape=observation_eit[a].shape))
+                                state_eit[a] = observation_eit[a], hc_eit[a]
+                                values_actions_eita, hc_eit[a] = model(x=state_eit[0], h=state_eit[1])
+                            else:
+                                state_eit[a] = observation_eit[a]
+                                values_actions_eita, hc_eit[a] = model(x=state_eit[a])
+
+                            action_eit[a] = self.sample_action(values_actions=values_actions_eita, epsilon=epsilon)
+
+                            delta_ebt[a] = model.compute_deltas(action_ebt[a])
+                        else:
+                            state_eit[a] = None
+                            action_eit[a] = None
+                            delta_ebt[a] = None
+
+                    next_observation_eit, reward_eit, not_over = environment['training'].step(
+                        actions=delta_ebt)
+
+                    obs_iterator.not_over = all([ob_a is None for ob_a in observation_eit]) or not_over
 
                     if is_recurrent:
-                        if hc_eit is None:
-                            hc_eit = model.init_h(batch_shape=model.get_batch_shape(input_shape=observation_eit.shape))
-                        state_eit = observation_eit, hc_eit
-                        values_actions_eit, hc_eit = model(x=state_eit[0], h=state_eit[1])
+                        next_state_eit = copy.deepcopy(next_observation_eit, hc_eit)
                     else:
-                        state_eit = observation_eit
-                        values_actions_eit, hc_eit = model(x=state_eit)
+                        next_state_eit = copy.deepcopy(next_observation_eit)
 
-                    action_eit = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
+                    replay_memory.(state=state_ebt, action=action_ebt, next_state=next_state_eit, reward=rewards_ebt)
 
-                    replay_memory.put(state=state_ebt, action=action_ebt, next_state=None, reward=rewards_ebt)
-
-                    delta_ebt = model.compute_deltas(action_ebt)
-
-                    environments_eb.step(delta_ebt)
+                    state_eit = copy.deepcopy(next_state_eit)
 
                 replay_memory.actions[-1] = None
                 # replay_memory.actions.pop()
