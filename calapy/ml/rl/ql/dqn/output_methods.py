@@ -814,7 +814,7 @@ class DQNMethods(OutputMethods):
                 os.remove(directory_stats)
             cp_txt.lines_to_csv_file(stats['lines'], directory_stats, stats['headers'])
 
-            print('Epoch: {e:d}. Validation. Training. Value Action Loss: {loss:s}. Reward per Observation {reward:s}.'.format(
+            print('Epoch: {e:d}. Validation. Value Action Loss: {loss:s}. Reward per Observation {reward:s}.'.format(
                 e=e, loss=loss_str_e, reward=reward_str_e))
 
             print('Epoch {e:d} - Unsuccessful Epochs {u:d}.'.format(e=e, u=epochs.u))
