@@ -70,7 +70,7 @@ class ObservationsIterator:
 
         self.t += 1
 
-        if self.not_over or (self.t < self.T):
+        if self.not_over and (self.t < self.T):
             return self.t
         else:
             raise StopIteration

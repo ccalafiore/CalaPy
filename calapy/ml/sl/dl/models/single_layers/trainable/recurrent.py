@@ -43,10 +43,12 @@ class _RNN(CPModelMethods):
                 self.is_with_hc = False
                 self.init_h = self._init_h
                 # del self._init_hc
+                self.concatenate_hs = self._concatenate_hs
             elif type_name_f in self.accepted_type_names_with_hc:
                 self.type_name = type_name_f
                 self.is_with_hc = True
                 self.init_h = self._init_hc
+                self.concatenate_hs = self._concatenate_hcs
             else:
                 raise ValueError('type_name')
         else:
@@ -293,6 +295,17 @@ class _RNN(CPModelMethods):
             raise TypeError('axis_time')
 
         return self.axis_time, self.is_timed, self.forward
+
+    def _concatenate_hs(self, hs, axis=0):
+
+        return torch.cat(hs, dim=axis)
+
+    def _concatenate_hcs(self, hs, axis=0):
+
+        return [torch.cat(hs[0], dim=axis), torch.cat(hs[1], dim=axis)]
+
+
+
 
 
 class RNN(_RNN):

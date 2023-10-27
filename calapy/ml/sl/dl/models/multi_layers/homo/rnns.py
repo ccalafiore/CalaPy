@@ -196,6 +196,14 @@ class RNN(_NN):
 
         return self.axis_time, self.is_timed
 
+    def concatenate_hs(self, hs, axis=0):
+
+        n_hs = len(hs)
+        # for l in range(0, self.L, 1):
+        #     self.layers[l].concatenate_hs([hs[i][l] for i in range(0, n_hs, 1)], axis=axis)
+
+        return [self.layers[l].concatenate_hs([hs[i][l] for i in range(0, n_hs, 1)], axis=axis) for l in range(0, self.L, 1)]
+
 
 class IndRNNs(_IndNNs):
 
@@ -373,6 +381,11 @@ class IndRNNs(_IndNNs):
         self.axis_time, self.is_timed = self.models[0].axis_time, self.models[0].is_timed
 
         return self.axis_time, self.is_timed
+
+    def concatenate_hs(self, hs, axis=0):
+
+        n_hs = len(hs)
+        return [self.models[m].concatenate_hs([hs[i][m] for i in range(0, n_hs, 1)], axis=axis) for m in range(0, self.M, 1)]
 
 
 class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
@@ -559,6 +572,13 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         self.axis_time, self.is_timed = self.shared_layers.axis_time, self.shared_layers.is_timed
 
         return self.axis_time, self.is_timed
+
+    def concatenate_hs(self, hs, axis=0):
+
+        n_hs = len(hs)
+        return [
+            self.shared_layers.concatenate_hs([hs[i][0] for i in range(0, n_hs, 1)], axis=axis),
+            self.private_layers.concatenate_hs([hs[i][1] for i in range(0, n_hs, 1)], axis=axis)]
 
 
 class SharedRNNAndIndRNNsAndIndFCNNs(RNNsWithSharedLayersAndPrivateLayers):
