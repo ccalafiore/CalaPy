@@ -8,14 +8,19 @@ class EpochsIterator:
 
         """
 
-        :type U: int | None
-        :type E: int | None
+        :type U: int | float | None
+        :type E: int | float | None
         """
 
         if U is None:
             self.U = math.inf
         elif isinstance(U, int):
             self.U = U
+        elif isinstance(U, float):
+            if U == math.inf:
+                self.U = U
+            else:
+                raise ValueError
         else:
             raise TypeError('U')
 
@@ -23,6 +28,11 @@ class EpochsIterator:
             self.E = math.inf
         elif isinstance(E, int):
             self.E = E
+        elif isinstance(E, float):
+            if E == math.inf:
+                self.E = E
+            else:
+                raise ValueError
         else:
             raise TypeError('E')
 

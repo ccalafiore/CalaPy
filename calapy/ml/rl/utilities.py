@@ -53,6 +53,11 @@ class ObservationsIterator:
             self.T = math.inf
         elif isinstance(T, int):
             self.T = T
+        elif isinstance(T, float):
+            if T == math.inf:
+                self.T = T
+            else:
+                raise ValueError
         else:
             raise TypeError('T')
 
