@@ -698,7 +698,7 @@ class DQNMethods(OutputMethods):
                             delta_ebt[a] = self.compute_deltas(action_eit[a])
 
                     next_observation_eit, reward_eit, obs_iterator.not_over = environment['training'].step(
-                        actions=delta_ebt)
+                        deltas=delta_ebt)
 
                     if next_observation_eit is None:
                         next_state_eit = None
