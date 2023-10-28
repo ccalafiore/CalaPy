@@ -494,11 +494,11 @@ class DQNMethods(OutputMethods):
             return len(self.states)
 
     def train(
-            self, environment, optimizer, U=10, E=None, min_n_episodes_for_optim=10, min_n_samples_for_optim=1000,
-            n_batches_per_train_phase=100, batch_size_of_train=100, max_time_steps_per_train_episode=None,
-            n_batches_per_val_phase=1000, batch_size_of_val=10, max_time_steps_per_val_episode=None,
-            epsilon_start=.95, epsilon_end=.05, epsilon_step=-.05,
-            directory_outputs=None):
+            self, environment, optimizer, U=10, E=None,
+            n_batches_per_train_phase=100, batch_size_of_train=100, T_train=None,
+            epsilon_start=.95, epsilon_end=.01, epsilon_step=-.05,  capacity=100000,
+            min_n_episodes_for_optim=2, min_n_samples_for_optim=1000,
+            n_episodes_per_val_phase=1000, T_val=None, directory_outputs=None):
 
         cp_timer = cp_clock.Timer()
 
@@ -509,52 +509,46 @@ class DQNMethods(OutputMethods):
             else:
                 raise ValueError('Unknown keys in environment')
 
-        n_batches_per_phase = {'training': n_batches_per_train_phase, 'validation': n_batches_per_val_phase}
-        if n_batches_per_phase['training'] is None:
-            n_batches_per_phase['training'] = 100
-        elif isinstance(n_batches_per_phase['training'], int):
+        if n_batches_per_train_phase is None:
+            n_batches_per_train_phase = 100
+        elif isinstance(n_batches_per_train_phase, int):
             pass
         else:
             raise TypeError('n_batches_per_train_phase')
-        if n_batches_per_phase['validation'] is None:
-            n_batches_per_phase['validation'] = 100
-        elif isinstance(n_batches_per_phase['validation'], int):
-            pass
-        else:
-            raise TypeError('n_batches_per_val_phase')
 
-        batch_size = {'training': batch_size_of_train, 'validation': batch_size_of_val}
-        if batch_size['training'] is None:
-            batch_size['training'] = 1000
-        elif isinstance(batch_size['training'], int):
+        if batch_size_of_train is None:
+            batch_size_of_train = 100
+        elif isinstance(batch_size_of_train, int):
             pass
         else:
             raise TypeError('batch_size_of_train')
-        if batch_size['validation'] is None:
-            batch_size['validation'] = 10
-        elif isinstance(batch_size['validation'], int):
-            pass
-        else:
-            raise TypeError('batch_size_of_val')
 
-        tot_observations_per_phase = {
-            phases_name_p: n_batches_per_phase[phases_name_p] * batch_size[phases_name_p]
-            for phases_name_p in phases_names}
+        tot_observations_per_train_phase = n_batches_per_train_phase * batch_size_of_train
 
-        max_time_steps_per_episode = {
-            'training': max_time_steps_per_train_episode, 'validation': max_time_steps_per_val_episode}
-        if max_time_steps_per_episode['training'] is None:
-            max_time_steps_per_episode['training'] = math.inf
-        elif isinstance(max_time_steps_per_episode['training'], int):
+        T = {'training': T_train, 'validation': T_val}
+        if T['training'] is None:
+            T['training'] = math.inf
+        elif isinstance(T['training'], int):
             pass
+        elif isinstance(T['training'], float):
+            if T['training'] == math.inf:
+                pass
+            else:
+                raise ValueError('T_train')
         else:
-            raise TypeError('max_time_steps_per_train_episode')
-        if max_time_steps_per_episode['validation'] is None:
-            max_time_steps_per_episode['validation'] = 10
-        elif isinstance(max_time_steps_per_episode['validation'], int):
+            raise TypeError('T_train')
+
+        if T['validation'] is None:
+            T['validation'] = math.inf
+        elif isinstance(T['validation'], int):
             pass
+        elif isinstance(T['validation'], float):
+            if T['validation'] == math.inf:
+                pass
+            else:
+                raise ValueError('T_val')
         else:
-            raise TypeError('max_time_steps_per_val_episode')
+            raise TypeError('T_val')
 
         self.model.freeze()
         torch.set_grad_enabled(False)
@@ -594,7 +588,7 @@ class DQNMethods(OutputMethods):
         print(dashes)
 
         replay_memory = self.ReplayMemory(
-            capacity=100000, batch_size=batch_size['training'], is_recurrent=self.is_recurrent, model=self.model)
+            capacity=capacity, batch_size=batch_size_of_train, is_recurrent=self.is_recurrent, model=self.model)
 
         lowest_loss = math.inf
         lowest_loss_str = str(lowest_loss)
@@ -605,9 +599,7 @@ class DQNMethods(OutputMethods):
         epsilon = epsilon_start  # todo to the model
         if epsilon < epsilon_end:
             epsilon = epsilon_end
-
         epsilon_validation = 0
-        e = 0
 
         epochs = cp_ml_utilities.EpochsIterator(U=U, E=E)
 
@@ -629,12 +621,11 @@ class DQNMethods(OutputMethods):
             running_n_rewards_e = 0
             running_rewards_e = 0.0
 
-            env_iterator = cp_rl_utilities.EnvironmentsIterator(
-                tot_observations_per_epoch=tot_observations_per_phase['training'])
+            s = 0
+            episodes_iterator = cp_rl_utilities.EpisodesIterator(
+                tot_observations_per_epoch=tot_observations_per_train_phase)
 
-            b = 0
-
-            for i in env_iterator:
+            for i, j in episodes_iterator:
 
                 observation_eit = environment['training'].reset()
 
@@ -645,7 +636,7 @@ class DQNMethods(OutputMethods):
                 # hc_eit = None
                 # state_eit = None
 
-                obs_iterator = cp_rl_utilities.ObservationsIterator(T=max_time_steps_per_episode['training'])
+                obs_iterator = cp_rl_utilities.ObservationsIterator(T=T['training'])
 
                 for t in obs_iterator:
 
@@ -692,8 +683,9 @@ class DQNMethods(OutputMethods):
 
                 # print('episode={i:d}     t={t:d}'.format(i=i, t=t))
 
-                if i >= min_n_episodes_for_optim:
-                    while (replay_memory.current_len >= min_n_samples_for_optim) and (replay_memory.current_len >= batch_size['training']):
+                if j >= min_n_episodes_for_optim:
+                    while ((replay_memory.current_len >= min_n_samples_for_optim) and
+                           (replay_memory.current_len >= batch_size_of_train) and episodes_iterator.not_over):
 
                         samples_eb = replay_memory.sample()
                         states_eb = samples_eb['states']
@@ -750,8 +742,8 @@ class DQNMethods(OutputMethods):
                         running_n_rewards_e += n_rewards_eb
                         running_rewards_e += sum(rewards_eb)
 
-                        env_iterator + batch_size['training']
-                        b += 1
+                        s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
+                        j = 0
 
             loss_e = running_loss_e / running_n_selected_actions_e
             reward_e = running_rewards_e / running_n_rewards_e
@@ -823,7 +815,7 @@ class DQNMethods(OutputMethods):
 
         print()
 
-        n_completed_epochs = e + 1
+        n_completed_epochs = E = e + 1
 
         time_training = cp_timer.get_delta_time_total()
 

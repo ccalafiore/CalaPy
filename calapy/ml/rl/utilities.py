@@ -3,10 +3,10 @@
 import math
 
 
-__all__ = ['EnvironmentsIterator', 'ObservationsIterator']
+__all__ = ['EpisodesIterator', 'ObservationsIterator']
 
 
-class EnvironmentsIterator:
+class EpisodesIterator:
 
     def __init__(self, tot_observations_per_epoch):
 
@@ -22,23 +22,33 @@ class EnvironmentsIterator:
 
     def __iter__(self):
         self.i = -1
+        self.j = -1
+        self.b = -1
         self.s = 0
         return self
 
     def __next__(self):
 
         self.i += 1
-        if self.s < self.tot_observations_per_epoch:
-            return self.i
+        self.j += 1
+
+        if self.not_over:
+            return self.i, self.j
         else:
             raise StopIteration
 
     def __add__(self, n_new_observations):
         self.s += n_new_observations
-        return self.s
+        self.b += 1
+        self.j = -1
+        return self.s, self.b
 
     def count_observations(self, n_new_observations):
         return self + n_new_observations
+
+    @property
+    def not_over(self):
+        return self.s < self.tot_observations_per_epoch
 
 
 class ObservationsIterator:
@@ -57,7 +67,7 @@ class ObservationsIterator:
             if T == math.inf:
                 self.T = T
             else:
-                raise ValueError
+                raise ValueError('T')
         else:
             raise TypeError('T')
 
