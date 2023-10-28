@@ -774,7 +774,7 @@ class DQNMethods(OutputMethods):
                         running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
 
                         running_n_rewards_e += n_rewards_eb
-                        running_rewards_e += sum(rewards_eb)
+                        running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
 
                         s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
                         j = 0
