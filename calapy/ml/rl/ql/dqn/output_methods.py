@@ -148,6 +148,40 @@ class DQNMethods(OutputMethods):
         if superclass not in self.superclasses_initiated:
             self.superclasses_initiated.append(superclass)
 
+    def q_values_to_actions(self, values_actions):
+
+        """
+
+        :type values_actions: list | torch.Tensor
+        :type epsilon: float
+        """
+
+        # todo: forward only n non-random actions
+
+        if isinstance(values_actions, torch.Tensor):
+            device = values_actions.device
+        else:
+            device = values_actions[0].device
+
+        A = len(values_actions)
+        shape_actions = self.compute_shape_losses(values_actions)
+
+        indexes_actions = [
+            slice(0, shape_actions[a], 1) if a != self.axis_models_losses else None
+            for a in range(0, values_actions[0].ndim, 1)]  # type: list
+
+        actions = torch.empty(shape_actions, dtype=torch.int64, device=device, requires_grad=False)
+
+        for a in range(0, A, 1):
+
+            indexes_actions[self.axis_models_losses] = a
+            tuple_indexes_actions = tuple(indexes_actions)
+
+            # actions[tuple_indexes_actions] = values_actions[a].max(dim=self.axis_features_outs, keepdim=True)[1]
+            actions[tuple_indexes_actions] = values_actions[a].max(dim=self.axis_features_outs, keepdim=False)[1]
+
+        return actions
+
     def sample_action(self, values_actions, epsilon=.1):
 
         """
