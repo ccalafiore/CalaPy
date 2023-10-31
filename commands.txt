@@ -1,4 +1,4 @@
-1) delete 4 folders: "build"; "calapy"; "calapy.egg-info"; "dist".
+1) delete 4 folders: "build"; "calapy.egg-info"; "dist".
 
 
 
