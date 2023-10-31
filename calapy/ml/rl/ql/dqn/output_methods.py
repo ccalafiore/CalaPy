@@ -47,6 +47,8 @@ class DQNMethods(OutputMethods):
         except NameError:
             self.superclasses_initiated = []
 
+        self.model = model
+
         if isinstance(possible_actions, list):
             self.possible_actions = possible_actions
         elif isinstance(possible_actions, tuple):
@@ -63,11 +65,11 @@ class DQNMethods(OutputMethods):
 
         for a in range(0, self.A, 1):
             if isinstance(self.possible_actions[a], (list, tuple)):
-                self.possible_actions[a] = torch.tensor(self.possible_actions[a])
+                self.possible_actions[a] = torch.tensor(self.possible_actions[a], device=model.device)
             elif isinstance(self.possible_actions[a], np.ndarray):
-                self.possible_actions[a] = torch.from_numpy(self.possible_actions[a])
+                self.possible_actions[a] = torch.from_numpy(self.possible_actions[a]).to(device=model.device)
             elif isinstance(self.possible_actions[a], torch.Tensor):
-                pass
+                self.possible_actions[a].to(device=model.device)
             else:
                 raise TypeError('n_possible_actions')
 
@@ -82,8 +84,6 @@ class DQNMethods(OutputMethods):
                 axis_models_losses=axis_models_losses, M=self.A, loss_scales=self.loss_scales_actors)
             if TimedOutputMethods not in self.superclasses_initiated:
                 self.superclasses_initiated.append(TimedOutputMethods)
-
-        self.model = model
 
         if isinstance(action_selection_type, str):
             if action_selection_type.lower() in ['active', 'random', 'same']:
