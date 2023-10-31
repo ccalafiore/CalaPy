@@ -14,8 +14,8 @@ __release_month_name__ = __release_date_object__.__format__('%B')
 del datetime
 
 __author__ = 'Calafiore Carmelo'
-__author_email__ = 'dr.carmelo.calafiore@gmail.com'
-__maintainer_email__ = 'dr.carmelo.calafiore@gmail.com'
+__author_email__ = 'carmelo.calafiore@newcastle.ac.uk'
+__maintainer_email__ = 'carmelo.calafiore@newcastle.ac.uk'
 
 submodules = [
     'array', 'check', 'clock', 'combinations', 'directory', 'download',
