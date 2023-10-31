@@ -1,7 +1,7 @@
 import os
 import sys
-from . import combinations as cc_combinations
-from . import maths as cc_maths
+from . import combinations as cp_combinations
+from . import maths as cp_maths
 
 
 def n_directories_up(directory, n=1):
@@ -42,7 +42,7 @@ def conditions_to_directories_on_the_fly(conditions_directories, order_outputs='
     if n_outputs > 1:
         outputs_i = [None] * n_outputs  # type: list
 
-    for combinations_i in cc_combinations.conditions_to_combinations_on_the_fly(
+    for combinations_i in cp_combinations.conditions_to_combinations_on_the_fly(
             conditions_directories, dtype='U', order_outputs=order_outputs):
         if n_outputs > 1:
             for o in range(n_outputs):
@@ -66,8 +66,8 @@ def conditions_to_directories_on_the_fly(conditions_directories, order_outputs='
 
 def conditions_to_directories(conditions_directories, order_outputs='v'):
 
-    n_conditions = cc_combinations.conditions_to_n_conditions(conditions_directories)
-    n_directories = cc_maths.prod(n_conditions)
+    n_conditions = cp_combinations.conditions_to_n_conditions(conditions_directories)
+    n_directories = cp_maths.prod(n_conditions)
     # n_variables = len(n_conditions)
 
     order_accepted_values = 'vi'

@@ -1,9 +1,9 @@
 import numpy as np
-from . import format as cc_format
+from . import format as cp_format
 
 
 def values_are_not_repeated(dictionare, name_dictionary=None):
-    keys, values = cc_format.dict_to_key_array_and_value_array(dictionare)
+    keys, values = cp_format.dict_to_key_array_and_value_array(dictionare)
     for v in values:
         if (v == values).sum() > 1:
             keys_equal = keys[v == values]

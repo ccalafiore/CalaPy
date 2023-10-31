@@ -2,7 +2,7 @@
 import importlib
 
 
-submodules = ['rl', 'sl']
+submodules = ['multi_layers', 'single_layers', 'image', 'model_tools']
 others = []
 __all__ = submodules + others
 

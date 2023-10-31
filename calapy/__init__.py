@@ -1,4 +1,5 @@
 import datetime
+import importlib
 
 __version__ = '0.1.18.1'
 
@@ -15,34 +16,13 @@ del datetime
 __author__ = 'Calafiore Carmelo'
 __author_email__ = 'dr.carmelo.calafiore@gmail.com'
 __maintainer_email__ = 'dr.carmelo.calafiore@gmail.com'
-__all__ = [
+
+submodules = [
     'array', 'check', 'clock', 'combinations', 'directory', 'download',
     'format', 'image', 'lists', 'maths', 'mixamo', 'ml', 'pkl', 'plot', 'preprocessing',
     'shutdown', 'stats', 'stimulation', 'strings', 'threading', 'txt']
+others = []
+__all__ = submodules + others
 
-
-def initiate(names_submodules=None):
-    template_import_string = "from . import "
-    if isinstance(names_submodules, str):
-        import_string_m = template_import_string + names_submodules
-        exec(import_string_m)
-    elif isinstance(names_submodules, (list, tuple)):
-        for name_m in names_submodules:
-            if isinstance(name_m, str):
-                import_string_m = template_import_string + name_m
-            else:
-                import_string_m = template_import_string + str(name_m)
-            exec(import_string_m)
-    elif names_submodules is None:
-        exec('from . import *')
-        # for name_m in __all__:
-        #     if isinstance(name_m, str):
-        #         import_string_m = template_import_string + name_m
-        #     else:
-        #         import_string_m = template_import_string + str(name_m)
-        #     exec(import_string_m)
-    else:
-        raise TypeError(names_submodules)
-
-
-initiate(names_submodules=__all__)
+for sub_module_m in submodules:
+    importlib.import_module(name='.' + sub_module_m, package=__package__)

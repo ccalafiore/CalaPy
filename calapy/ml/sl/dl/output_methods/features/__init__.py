@@ -1,8 +1,9 @@
 
+
 import importlib
 
+submodules = ['classifiers']
 
-submodules = ['rl', 'sl']
 others = []
 __all__ = submodules + others
 

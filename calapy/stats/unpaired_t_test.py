@@ -4,7 +4,7 @@ import numpy as np
 import numpy.ma as ma
 from scipy.stats import t
 # from scipy.stats.stats import _ttest_finish
-from . import descriptive as cc_stats_descriptive
+from . import descriptive as cp_stats_descriptive
 from ..combinations import n_conditions_to_combinations
 
 
@@ -69,7 +69,7 @@ def scores_formatted_to_df_in_unpaired_t_test(
         if axis_samples < 0:
             axis_samples += n_axes_scores_formatted
 
-    n_samples = cc_stats_descriptive.scores_to_n_samples(scores_formatted, axis_samples, keepdims=keepdims)
+    n_samples = cp_stats_descriptive.scores_to_n_samples(scores_formatted, axis_samples, keepdims=keepdims)
 
     shape_n_samples = np.asarray(n_samples.shape)
     n_axes_n_samples = shape_n_samples.size
@@ -87,7 +87,7 @@ def scores_formatted_to_df_in_unpaired_t_test(
     if equal_variances:
         df = n_samples[indexes_0_tuple] + n_samples[indexes_1_tuple] - 2
     else:
-        variances = cc_stats_descriptive.scores_to_variances(scores_formatted, axis_samples, keepdims=keepdims)
+        variances = cp_stats_descriptive.scores_to_variances(scores_formatted, axis_samples, keepdims=keepdims)
 
         numerator_df = ((variances[indexes_0_tuple] / n_samples[indexes_0_tuple]) +
                         (variances[indexes_1_tuple] / n_samples[indexes_1_tuple]))**2
@@ -121,8 +121,8 @@ def scores_formatted_to_denominator_of_unpaired_t_test(
         if axis_samples < 0:
             axis_samples += n_axes_scores_formatted
 
-    n_samples = cc_stats_descriptive.scores_to_n_samples(scores_formatted, axis_samples, keepdims=keepdims)
-    variances = cc_stats_descriptive.scores_to_variances(scores_formatted, axis_samples, keepdims=keepdims)
+    n_samples = cp_stats_descriptive.scores_to_n_samples(scores_formatted, axis_samples, keepdims=keepdims)
+    variances = cp_stats_descriptive.scores_to_variances(scores_formatted, axis_samples, keepdims=keepdims)
 
     shape_n_samples = np.asarray(n_samples.shape)
     n_axes_n_samples = shape_n_samples.size
@@ -183,8 +183,8 @@ def scores_formatted_to_unpaired_t_test(
         if axis_samples < 0:
             axis_samples += n_axes_scores_formatted
 
-    means_of_scores = cc_stats_descriptive.scores_to_means(scores_formatted, axis_samples, keepdims=keepdims)
-    diff_of_means = cc_stats_descriptive.scores_to_diff_of_scores(means_of_scores, axis_comparisons, keepdims=keepdims)
+    means_of_scores = cp_stats_descriptive.scores_to_means(scores_formatted, axis_samples, keepdims=keepdims)
+    diff_of_means = cp_stats_descriptive.scores_to_diff_of_scores(means_of_scores, axis_comparisons, keepdims=keepdims)
 
     denominator = scores_formatted_to_denominator_of_unpaired_t_test(
         scores_formatted, axis_comparisons, axis_samples,

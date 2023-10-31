@@ -6,10 +6,10 @@ import pandas as pd
 import os
 import glob
 from itertools import (takewhile, repeat)
-from . import array as cc_array
-from . import directory as cc_directory
-from . import format as cc_format
-from . import combinations as cc_combinations
+from . import array as cp_array
+from . import directory as cp_directory
+from . import format as cp_format
+from . import combinations as cp_combinations
 
 
 def text_to_txt_file(text, filename, encoding=None):
@@ -109,14 +109,14 @@ def array_to_csv_files(
 
     axes_array = np.arange(0, n_axes, 1)
     axes_table = np.asarray([axis_rows, axis_columns], dtype='i')
-    axes_files = np.where(np.logical_not(cc_array.samples_in_arr1_are_in_arr2(axes_array, axes_table, axis=0)))[0]
+    axes_files = np.where(np.logical_not(cp_array.samples_in_arr1_are_in_arr2(axes_array, axes_table, axis=0)))[0]
 
     if delimiter is None:
         delimiter = ','
 
-    # for combination_indexes_i, combination_directories_i in cc_combinations.conditions_to_combinations_on_the_fly(
+    # for combination_indexes_i, combination_directories_i in cp_combinations.conditions_to_combinations_on_the_fly(
     #         conditions_of_directories, dtype='U', order_outputs='iv'):
-    for combination_indexes_i, directory_i in cc_directory.conditions_to_directories_on_the_fly(
+    for combination_indexes_i, directory_i in cp_directory.conditions_to_directories_on_the_fly(
             conditions_of_directories, order_outputs='iv'):
 
         indexes_array[axes_files] = combination_indexes_i
@@ -291,7 +291,7 @@ def csv_file_to_arrays(filename, rows, columns, delimiter=None, dtype=None, enco
     n_axes_per_text = 2
     arrays = [None] * n_arrays
     for a in range(n_arrays):
-        indexes = tuple(cc_format.numeric_indexes_to_slice([rows[a], columns[a]]))
+        indexes = tuple(cp_format.numeric_indexes_to_slice([rows[a], columns[a]]))
         if (dtype[a] is None) or (dtype[a] == str) or (dtype[a] == 'U'):
             arrays[a] = table[indexes]
         else:
@@ -307,7 +307,7 @@ def conditions_of_csv_files_to_arrays(
     for i in range(n_axes_directories):
         n_conditions_directories[i] = len(conditions_of_directories[i])
     # logical_indexes_conditions = n_conditions_directories > 1
-    combinations_directories = cc_combinations.n_conditions_to_combinations(n_conditions_directories)
+    combinations_directories = cp_combinations.n_conditions_to_combinations(n_conditions_directories)
     n_combinations_directories = combinations_directories.shape[0]
     axes_directories_squeezed = n_conditions_directories > 1
     n_axes_directories_squeezed = np.sum(axes_directories_squeezed)
@@ -353,7 +353,7 @@ def conditions_of_csv_files_to_arrays(
     indexes = [None] * n_arrays  # type: list
     arrays = [None] * n_arrays  # type: list
     for a in range(n_arrays):
-        indexes[a] = tuple(cc_format.numeric_indexes_to_slice([rows[a], columns[a]]))
+        indexes[a] = tuple(cp_format.numeric_indexes_to_slice([rows[a], columns[a]]))
 
     directory_csv_d = os.path.join(*[
         conditions_of_directories[i][0] for i in range(n_axes_directories)])
@@ -422,7 +422,7 @@ def n_csv_files_to_array_old(
 
     logical_indexes_conditions = n_conditions_directories > 1
 
-    combinations_directories = cc_combinations.n_conditions_to_combinations(n_conditions_directories)
+    combinations_directories = cp_combinations.n_conditions_to_combinations(n_conditions_directories)
     n_combinations_directories = combinations_directories.shape[0]
 
     if delimiter is None:

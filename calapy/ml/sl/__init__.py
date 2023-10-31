@@ -2,7 +2,7 @@
 import importlib
 
 
-submodules = ['rl', 'sl']
+submodules = ['dl']
 others = []
 __all__ = submodules + others
 

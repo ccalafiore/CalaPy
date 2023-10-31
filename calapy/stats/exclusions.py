@@ -1,9 +1,9 @@
 import numpy as np
 from copy import deepcopy
 from . import descriptive
-from .. import array as cc_array
-from .. import maths as cc_maths
-from .. import format as cc_format
+from .. import array as cp_array
+from .. import maths as cp_maths
+from .. import format as cp_format
 
 
 def exclude_trials_with_rt_out_of_range(
@@ -186,8 +186,8 @@ def exclude_subs_with_higher_excluded_trials(data, axis, threshold, percentage=F
     for o in range(n_outputs):
         if order[o] in 'nle':
             n_excluded_trials_subs = descriptive.scores_to_value_frequencies(data, axis, value)
-            # if cc_maths.is_nan(value):
-            #     excluded_trials_logical = cc_maths.is_nan(data)
+            # if cp_maths.is_nan(value):
+            #     excluded_trials_logical = cp_maths.is_nan(data)
             # else:
             #     excluded_trials_logical = data == value
             # n_excluded_trials_subs = np.sum(excluded_trials_logical, axis=axis, initial=0)
@@ -308,13 +308,13 @@ def exclude_subs(data, axis, subs_exc):
         data = np.asarray(data)
 
     subs_all = np.arange(data.shape[axis])
-    subs_keep = subs_all[cc_array.samples_in_arr1_are_not_in_arr2(subs_all, subs_exc, axis=0)]
+    subs_keep = subs_all[cp_array.samples_in_arr1_are_not_in_arr2(subs_all, subs_exc, axis=0)]
 
     n_axes = len(data.shape)
     indexes_data = np.empty(n_axes, dtype='O')
     for a in range(n_axes):
         if a == axis:
-            indexes_data[a] = cc_format.numeric_indexes_to_slice(subs_keep)
+            indexes_data[a] = cp_format.numeric_indexes_to_slice(subs_keep)
         else:
             indexes_data[a] = slice(0, data.shape[a], 1)
 
