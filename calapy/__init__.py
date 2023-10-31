@@ -1,10 +1,10 @@
 import datetime
 import importlib
 
-__version__ = '0.1.18.1'
+__version__ = '0.1.19.0'
 
-__release_day__ = 14
-__release_month_num__ = 5
+__release_day__ = 31
+__release_month_num__ = 10
 __release_year__ = 2023
 
 
