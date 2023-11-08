@@ -5,12 +5,13 @@ import copy
 import math
 import torch
 import numpy as np
-from ....sl.dl.output_methods.general import *
 from ..... import clock as cp_clock
 from ..... import strings as cp_strings
 from ..... import txt as cp_txt
-from .....ml import utilities as cp_ml_utilities
 from ....rl import utilities as cp_rl_utilities
+from .....ml import utilities as cp_ml_utilities
+from ....sl.dl import devices as cp_device
+from ....sl.dl.output_methods.general import *
 
 
 __all__ = ['DQNMethods', 'TimedDQNMethods']
@@ -19,9 +20,9 @@ __all__ = ['DQNMethods', 'TimedDQNMethods']
 class DQNMethods(OutputMethods):
 
     def __init__(
-            self, model, axis_features_outs, axis_models_losses,
+            self, axis_features_outs, axis_models_losses,
             possible_actions, action_selection_type='active', same_indexes_actions=None,
-            gamma=0.999, reward_bias=0.0, loss_scales_actors=None, is_recurrent=False):
+            gamma=0.999, reward_bias=0.0, loss_scales_actors=None, is_recurrent=False, device=None, dtype=None):
 
         """
 
@@ -47,7 +48,8 @@ class DQNMethods(OutputMethods):
         except NameError:
             self.superclasses_initiated = []
 
-        self.model = model
+        self.device = cp_device.define_device(device=device)
+        self.dtype = dtype
 
         if isinstance(possible_actions, list):
             self.possible_actions = possible_actions
@@ -65,11 +67,11 @@ class DQNMethods(OutputMethods):
 
         for a in range(0, self.A, 1):
             if isinstance(self.possible_actions[a], (list, tuple)):
-                self.possible_actions[a] = torch.tensor(self.possible_actions[a], device=model.device)
+                self.possible_actions[a] = torch.tensor(self.possible_actions[a], device=self.device)
             elif isinstance(self.possible_actions[a], np.ndarray):
-                self.possible_actions[a] = torch.from_numpy(self.possible_actions[a]).to(device=model.device)
+                self.possible_actions[a] = torch.from_numpy(self.possible_actions[a]).to(device=self.device)
             elif isinstance(self.possible_actions[a], torch.Tensor):
-                self.possible_actions[a].to(device=model.device)
+                self.possible_actions[a].to(device=self.device)
             else:
                 raise TypeError('n_possible_actions')
 
@@ -132,7 +134,6 @@ class DQNMethods(OutputMethods):
         else:
             raise TypeError('reward_bias')
 
-
         if reward_bias is None:
             self.reward_bias = 0.0
         elif isinstance(reward_bias, float):
@@ -153,7 +154,6 @@ class DQNMethods(OutputMethods):
         """
 
         :type values_actions: list | torch.Tensor
-        :type epsilon: float
         """
 
         # todo: forward only n non-random actions
@@ -395,7 +395,7 @@ class DQNMethods(OutputMethods):
     class ReplayMemory:
         """A simple replay buffer."""
 
-        def __init__(self, capacity, batch_size, is_recurrent, model=None):
+        def __init__(self, capacity, batch_size, is_recurrent, batch_axis):
 
             self.states = []
             self.actions = []
@@ -419,12 +419,14 @@ class DQNMethods(OutputMethods):
             else:
                 raise TypeError('is_recurrent')
 
-            self.model = model
+            if isinstance(batch_axis, int):
+                self.batch_axis = batch_axis
+            else:
+                raise TypeError('batch_axis')
+
             self.current_len = 0
 
-
-        def add(self, states=None, actions=None, rewards=None, next_states=None):
-
+        def add_list_of_states(self, states, actions, rewards, next_states):
 
             n_new_states = len(states)
 
@@ -458,6 +460,46 @@ class DQNMethods(OutputMethods):
             self.current_len = len(self.states)
 
             self.remove_extras()
+
+        def add_array_of_batched_states(self, states, actions, rewards, next_states, model=None):
+
+            if self.is_recurrent:
+                n_new_states = states[0].shape[self.batch_axis]
+                self.states += [[states[0][slice(a, a + 1, 1)], states[1][slice(a, a + 1, 1)]] for a in range(0, n_new_states, 1)]
+            else:
+                n_new_states = states.shape[self.batch_axis]
+
+            for a in range(0, n_new_states, 1):
+
+                if states[a] is not None:
+                    self.states.append(states[a])
+
+                    self.actions.append(actions[a])
+
+                    self.rewards.append(rewards[a])
+
+                    if self.is_recurrent:
+
+                        if next_states[a][0] is None:
+                            self.next_states.append([
+                                torch.zeros(
+                                    size=states[a][0].shape, device=self.states[a][0].device,
+                                    dtype=states[a][0].dtype, requires_grad=False),
+                                next_states[a][1]])
+                        else:
+                            self.next_states.append(next_states[a])
+                    else:
+                        if next_states[a] is None:
+                            self.next_states.append(torch.zeros(
+                                size=states[a].shape, device=self.states[a].device,
+                                dtype=states[a].dtype, requires_grad=False))
+                        else:
+                            self.next_states.append(next_states[a])
+
+            self.current_len = len(self.states)
+
+            self.remove_extras()
+
 
         def remove_extras(self):
 
@@ -663,10 +705,10 @@ class DQNMethods(OutputMethods):
 
                 observation_eit = environment['training'].reset()
 
-                hc_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
-                state_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
-                action_eit = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
-                delta_ebt = [None for a in range(0, environment['training'].n_platforms, 1)]  # type: list
+                hc_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
+                state_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
+                action_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
+                delta_ebt = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
                 # hc_eit = None
                 # state_eit = None
 
@@ -674,7 +716,7 @@ class DQNMethods(OutputMethods):
 
                 for t in obs_iterator:
 
-                    for a in range(0, environment['training'].n_platforms, 1):
+                    for a in range(0, environment['training'].n_agents, 1):
 
                         if observation_eit[a] is None:
                             hc_eit[a] = None
@@ -705,7 +747,7 @@ class DQNMethods(OutputMethods):
                     else:
                         if self.is_recurrent:
                             next_state_eit = [
-                                [next_observation_eit[a], hc_eit[a]] for a in range(0, environment['training'].n_platforms, 1)]
+                                [next_observation_eit[a], hc_eit[a]] for a in range(0, environment['training'].n_agents, 1)]
                         else:
                             next_state_eit = next_observation_eit
 
@@ -817,10 +859,10 @@ class DQNMethods(OutputMethods):
 
                 observation_eit = environment['validation'].reset()
 
-                hc_eit = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
-                state_eit = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
-                action_eit = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
-                delta_ebt = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
+                hc_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                state_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                action_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                delta_ebt = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
                 # hc_eit = None
                 # state_eit = None
 
@@ -828,29 +870,6 @@ class DQNMethods(OutputMethods):
 
                 for t in obs_iterator:
 
-                    for a in range(0, environment['validation'].n_platforms, 1):
-
-                        if observation_eit[a] is None:
-                            hc_eit[a] = None
-                            state_eit[a] = None
-                            action_eit[a] = None
-                            delta_ebt[a] = None
-                        else:
-                            if self.is_recurrent:
-                                if hc_eit[a] is None:
-                                    hc_eit[a] = self.model.init_h(
-                                        batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
-                                if state_eit[a] is None:
-                                    state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
-                                values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
-                            else:
-                                if state_eit[a] is None:
-                                    state_eit[a] = copy.deepcopy(observation_eit[a])
-                                values_actions_eit = self.model(x=state_eit[a])
-
-                            action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
-
-                            delta_ebt[a] = self.compute_deltas(action_eit[a])
 
                     next_observation_eit, reward_eit, obs_iterator.not_over = environment['validation'].step(
                         deltas=delta_ebt)
@@ -861,7 +880,7 @@ class DQNMethods(OutputMethods):
                         if self.is_recurrent:
                             next_state_eit = [
                                 [next_observation_eit[a], hc_eit[a]] for a in
-                                range(0, environment['validation'].n_platforms, 1)]
+                                range(0, environment['validation'].n_agents, 1)]
                         else:
                             next_state_eit = next_observation_eit
 
@@ -880,47 +899,47 @@ class DQNMethods(OutputMethods):
                         next_values_actions=next_values_actions_eb, rewards=rewards_eb)
 
 
-                        # forward
-                        # track history
-                        torch.set_grad_enabled(True)
-                        self.model.unfreeze()
+                    # forward
+                    # track history
+                    torch.set_grad_enabled(True)
+                    self.model.unfreeze()
 
-                        if self.is_recurrent:
-                            values_actions_eb, hc_eb = self.model(x=states_eb[0], h=states_eb[1])
-                        else:
-                            values_actions_eb = self.model(x=states_eb)
+                    if self.is_recurrent:
+                        values_actions_eb, hc_eb = self.model(x=states_eb[0], h=states_eb[1])
+                    else:
+                        values_actions_eb = self.model(x=states_eb)
 
-                        values_selected_actions_eb = self.gather_values_selected_actions(
-                            values_actions=values_actions_eb, actions=actions_eb)
+                    values_selected_actions_eb = self.gather_values_selected_actions(
+                        values_actions=values_actions_eb, actions=actions_eb)
 
-                        value_action_losses_eb = self.compute_value_action_losses(
-                            values_selected_actions=values_selected_actions_eb,
-                            expected_values_actions=expected_values_actions_eb)
+                    value_action_losses_eb = self.compute_value_action_losses(
+                        values_selected_actions=values_selected_actions_eb,
+                        expected_values_actions=expected_values_actions_eb)
 
-                        scaled_value_action_loss_eb = self.reduce_value_action_losses(
-                            value_action_losses=value_action_losses_eb, axes_not_included=None,
-                            scaled=True, loss_scales_actors=None, format_scales=False)
+                    scaled_value_action_loss_eb = self.reduce_value_action_losses(
+                        value_action_losses=value_action_losses_eb, axes_not_included=None,
+                        scaled=True, loss_scales_actors=None, format_scales=False)
 
-                        scaled_value_action_loss_eb.backward()
-                        optimizer.step()
+                    scaled_value_action_loss_eb.backward()
+                    optimizer.step()
 
-                        self.model.freeze()
-                        torch.set_grad_enabled(False)
+                    self.model.freeze()
+                    torch.set_grad_enabled(False)
 
-                        n_selected_actions_eb = self.compute_n_selected_actions(
-                            selected_actions=actions_eb, axes_not_included=None)
+                    n_selected_actions_eb = self.compute_n_selected_actions(
+                        selected_actions=actions_eb, axes_not_included=None)
 
-                        n_rewards_eb = self.compute_n_selected_actions(
-                            selected_actions=actions_eb, axes_not_included=None)
+                    n_rewards_eb = self.compute_n_selected_actions(
+                        selected_actions=actions_eb, axes_not_included=None)
 
-                        running_n_selected_actions_e += n_selected_actions_eb
-                        running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
+                    running_n_selected_actions_e += n_selected_actions_eb
+                    running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
 
-                        running_n_rewards_e += n_rewards_eb
-                        running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
+                    running_n_rewards_e += n_rewards_eb
+                    running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
 
-                        s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
-                        j = 0
+                    s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
+                    j = 0
 
             loss_e = running_loss_e / running_n_selected_actions_e
             reward_e = running_rewards_e / running_n_rewards_e
@@ -1009,6 +1028,36 @@ class DQNMethods(OutputMethods):
         print('Highest Reward: {:s}'.format(highest_reward_str))
 
         return self.model
+
+    def _multi_agent_obs_to_deltas(self, observation_eit, ):
+
+        n_agents = len(observation_eit)
+
+        for a in range(0, n_agents, 1):
+
+            if observation_eit[a] is None:
+                hc_eit[a] = None
+                state_eit[a] = None
+                action_eit[a] = None
+                delta_ebt[a] = None
+            else:
+                if self.is_recurrent:
+                    if hc_eit[a] is None:
+                        hc_eit[a] = self.model.init_h(
+                            batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+                    if state_eit[a] is None:
+                        state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
+                    values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
+                else:
+                    if state_eit[a] is None:
+                        state_eit[a] = copy.deepcopy(observation_eit[a])
+                    values_actions_eit = self.model(x=state_eit[a])
+
+                action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
+
+                delta_ebt[a] = self.compute_deltas(action_eit[a])
+
+
 
 
 class TimedDQNMethods(DQNMethods, TimedOutputMethods):

@@ -204,6 +204,11 @@ class RNN(_NN):
 
         return [self.layers[l].concatenate_hs([hs[i][l] for i in range(0, n_hs, 1)], axis=axis) for l in range(0, self.L, 1)]
 
+    def unbatch(self, h, axis=0, keepdim=True):
+
+
+        return [self.layers[l].unbatch_h(h[l], axis=axis, keepdim=keepdim) for l in range(0, self.L, 1)]
+
 
 class IndRNNs(_IndNNs):
 
