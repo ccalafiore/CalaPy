@@ -795,6 +795,154 @@ class DQNMethods(OutputMethods):
             if epsilon < epsilon_end:
                 epsilon = epsilon_end
 
+
+
+
+
+
+            # validation phase
+
+            self.model.eval()
+
+            running_n_selected_actions_e = 0
+            running_loss_e = 0.0
+
+            running_n_rewards_e = 0
+            running_rewards_e = 0.0
+
+            s = 0
+            episodes_iterator = cp_rl_utilities.ValEpisodesIterator(n_episodes=n_episodes_per_val_phase)
+
+            for i in episodes_iterator:
+
+                observation_eit = environment['validation'].reset()
+
+                hc_eit = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
+                state_eit = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
+                action_eit = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
+                delta_ebt = [None for a in range(0, environment['validation'].n_platforms, 1)]  # type: list
+                # hc_eit = None
+                # state_eit = None
+
+                obs_iterator = cp_rl_utilities.ObservationsIterator(T=T['validation'])
+
+                for t in obs_iterator:
+
+                    for a in range(0, environment['validation'].n_platforms, 1):
+
+                        if observation_eit[a] is None:
+                            hc_eit[a] = None
+                            state_eit[a] = None
+                            action_eit[a] = None
+                            delta_ebt[a] = None
+                        else:
+                            if self.is_recurrent:
+                                if hc_eit[a] is None:
+                                    hc_eit[a] = self.model.init_h(
+                                        batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+                                if state_eit[a] is None:
+                                    state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
+                                values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
+                            else:
+                                if state_eit[a] is None:
+                                    state_eit[a] = copy.deepcopy(observation_eit[a])
+                                values_actions_eit = self.model(x=state_eit[a])
+
+                            action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
+
+                            delta_ebt[a] = self.compute_deltas(action_eit[a])
+
+                    next_observation_eit, reward_eit, obs_iterator.not_over = environment['validation'].step(
+                        deltas=delta_ebt)
+
+                    if next_observation_eit is None:
+                        next_state_eit = None
+                    else:
+                        if self.is_recurrent:
+                            next_state_eit = [
+                                [next_observation_eit[a], hc_eit[a]] for a in
+                                range(0, environment['validation'].n_platforms, 1)]
+                        else:
+                            next_state_eit = next_observation_eit
+
+                    observation_eit = next_observation_eit
+                    state_eit = copy.deepcopy(next_state_eit)
+
+                # print('episode={i:d}     t={t:d}'.format(i=i, t=t))
+
+
+                    if self.is_recurrent:
+                        next_values_actions_eb, next_hc_eb = self.model(x=next_states_eb[0], h=next_states_eb[1])
+                    else:
+                        next_values_actions_eb = self.model(x=next_states_eb)
+
+                    expected_values_actions_eb = self.compute_expected_values_actions(
+                        next_values_actions=next_values_actions_eb, rewards=rewards_eb)
+
+
+                        # forward
+                        # track history
+                        torch.set_grad_enabled(True)
+                        self.model.unfreeze()
+
+                        if self.is_recurrent:
+                            values_actions_eb, hc_eb = self.model(x=states_eb[0], h=states_eb[1])
+                        else:
+                            values_actions_eb = self.model(x=states_eb)
+
+                        values_selected_actions_eb = self.gather_values_selected_actions(
+                            values_actions=values_actions_eb, actions=actions_eb)
+
+                        value_action_losses_eb = self.compute_value_action_losses(
+                            values_selected_actions=values_selected_actions_eb,
+                            expected_values_actions=expected_values_actions_eb)
+
+                        scaled_value_action_loss_eb = self.reduce_value_action_losses(
+                            value_action_losses=value_action_losses_eb, axes_not_included=None,
+                            scaled=True, loss_scales_actors=None, format_scales=False)
+
+                        scaled_value_action_loss_eb.backward()
+                        optimizer.step()
+
+                        self.model.freeze()
+                        torch.set_grad_enabled(False)
+
+                        n_selected_actions_eb = self.compute_n_selected_actions(
+                            selected_actions=actions_eb, axes_not_included=None)
+
+                        n_rewards_eb = self.compute_n_selected_actions(
+                            selected_actions=actions_eb, axes_not_included=None)
+
+                        running_n_selected_actions_e += n_selected_actions_eb
+                        running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
+
+                        running_n_rewards_e += n_rewards_eb
+                        running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
+
+                        s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
+                        j = 0
+
+            loss_e = running_loss_e / running_n_selected_actions_e
+            reward_e = running_rewards_e / running_n_rewards_e
+
+            stats['lines'][e][stats['headers']['Training_Loss']] = loss_e
+            stats['lines'][e][stats['headers']['Training_Reward_Per_Observation']] = reward_e
+
+            loss_str_e = cp_strings.format_float_to_str(loss_e, n_decimals=n_decimals_for_printing)
+            reward_str_e = cp_strings.format_float_to_str(reward_e, n_decimals=n_decimals_for_printing)
+
+            print('Epoch: {e:d}. Training. Value Action Loss: {loss:s}. Reward per Observation {reward:s}'.format(
+                e=e, loss=loss_str_e, reward=reward_str_e))
+
+
+
+
+
+
+
+
+
+
             model_dict = copy.deepcopy(self.model.state_dict())
             if os.path.isfile(directory_model_at_last_epoch):
                 os.remove(directory_model_at_last_epoch)
@@ -808,7 +956,7 @@ class DQNMethods(OutputMethods):
                 lowest_loss_str = cp_strings.format_float_to_str(loss_e, n_decimals=n_decimals_for_printing)
 
                 stats['lines'][e][stats['headers']['Is_Lower_Validation_Loss']] = 1
-                is_successful_epoch = True
+                # is_successful_epoch = True
 
                 if os.path.isfile(directory_model_with_lowest_loss):
                     os.remove(directory_model_with_lowest_loss)
@@ -823,7 +971,7 @@ class DQNMethods(OutputMethods):
                 highest_reward_str = cp_strings.format_float_to_str(highest_reward, n_decimals=n_decimals_for_printing)
 
                 stats['lines'][e][stats['headers']['Is_Highest_Validation_Reward']] = 1
-                # is_successful_epoch = True
+                is_successful_epoch = True
 
                 if os.path.isfile(directory_model_with_highest_reward):
                     os.remove(directory_model_with_highest_reward)
