@@ -10,7 +10,6 @@ from ..... import strings as cp_strings
 from ..... import txt as cp_txt
 from ....rl import utilities as cp_rl_utilities
 from .....ml import utilities as cp_ml_utilities
-from ....sl.dl import devices as cp_device
 from ....sl.dl.output_methods.general import *
 
 
@@ -20,9 +19,9 @@ __all__ = ['DQNMethods', 'TimedDQNMethods']
 class DQNMethods(OutputMethods):
 
     def __init__(
-            self, axis_features_outs, axis_models_losses,
+            self, model, axis_features_outs, axis_models_losses,
             possible_actions, action_selection_type='active', same_indexes_actions=None,
-            gamma=0.999, reward_bias=0.0, loss_scales_actors=None, is_recurrent=False, device=None, dtype=None):
+            gamma=0.999, reward_bias=0.0, loss_scales_actors=None, is_recurrent=False):
 
         """
 
@@ -48,8 +47,10 @@ class DQNMethods(OutputMethods):
         except NameError:
             self.superclasses_initiated = []
 
-        self.device = cp_device.define_device(device=device)
-        self.dtype = dtype
+        self.model = model
+
+        self.device = model.device
+        self.dtype = model.dtype
 
         if isinstance(possible_actions, list):
             self.possible_actions = possible_actions
@@ -487,7 +488,7 @@ class DQNMethods(OutputMethods):
         dashes = '-' * n_dashes
         print(dashes)
 
-        replay_memory = self.ReplayMemory(
+        replay_memory = ReplayMemory(
             capacity=capacity, batch_size=batch_size_of_train, is_recurrent=self.is_recurrent, model=self.model)
 
         lowest_loss = math.inf
@@ -502,6 +503,8 @@ class DQNMethods(OutputMethods):
         epsilon_validation = 0
 
         epochs = cp_ml_utilities.EpochsIterator(U=U, E=E)
+        e = 0
+        u = 0
 
         for e, u in epochs:
 
@@ -522,7 +525,7 @@ class DQNMethods(OutputMethods):
             running_rewards_e = 0.0
 
             s = 0
-            episodes_iterator = cp_rl_utilities.EpisodesIterator(
+            episodes_iterator = cp_rl_utilities.TrainEpisodesIterator(
                 tot_observations_per_epoch=tot_observations_per_train_phase)
 
             for i, j in episodes_iterator:
@@ -882,11 +885,10 @@ class DQNMethods(OutputMethods):
                 delta_ebt[a] = self.compute_deltas(action_eit[a])
 
 
-
 class ReplayMemory:
     """A simple replay buffer."""
 
-    def __init__(self, capacity, batch_size, is_recurrent, batch_axis):
+    def __init__(self, capacity, batch_size, input_batch_axis, action_batch_axis, is_recurrent=False, model=None):
 
         self.states = []
         self.actions = []
@@ -903,6 +905,16 @@ class ReplayMemory:
         else:
             raise TypeError('batch_size')
 
+        if isinstance(input_batch_axis, int):
+            self.input_batch_axis = input_batch_axis
+        else:
+            raise TypeError('input_batch_axis')
+
+        if isinstance(action_batch_axis, int):
+            self.action_batch_axis = action_batch_axis
+        else:
+            raise TypeError('action_batch_axis')
+
         if is_recurrent is None:
             self.is_recurrent = False
         elif isinstance(is_recurrent, bool):
@@ -910,14 +922,17 @@ class ReplayMemory:
         else:
             raise TypeError('is_recurrent')
 
-        if isinstance(batch_axis, int):
-            self.batch_axis = batch_axis
+        if self.is_recurrent:
+            if model is None:
+                raise ValueError('model')
+            else:
+                self.model = model
         else:
-            raise TypeError('batch_axis')
+            self.model = None
 
         self.current_len = 0
 
-    def add_list_of_states(self, states, actions, rewards, next_states):
+    def add_list(self, states, actions, rewards, next_states):
 
         n_new_states = len(states)
 
@@ -930,40 +945,24 @@ class ReplayMemory:
 
                 self.rewards.append(rewards[a])
 
-                if self.is_recurrent:
-
-                    if next_states[a][0] is None:
-                        self.next_states.append([
-                            torch.zeros(
-                                size=states[a][0].shape, device=self.states[a][0].device,
-                                dtype=states[a][0].dtype, requires_grad=False),
-                            next_states[a][1]])
-                    else:
-                        self.next_states.append(next_states[a])
-                else:
-                    if next_states[a] is None:
-                        self.next_states.append(torch.zeros(
-                            size=states[a].shape, device=self.states[a].device,
-                            dtype=states[a].dtype, requires_grad=False))
-                    else:
-                        self.next_states.append(next_states[a])
+                self.next_states.append(next_states[a])
 
         self.current_len = len(self.states)
 
         self.remove_extras()
 
-    def add_array_of_batched_states(self, states, actions, rewards, next_states):
+    def add_batch(self, states, actions, rewards, next_states):
 
         if self.is_recurrent:
-            n_new_states = states[0].shape[self.batch_axis]
+            n_new_states = states[0].shape[self.input_batch_axis]
             self.states += [[states[0][slice(a, a + 1, 1)], states[1][slice(a, a + 1, 1)]] for a in range(0, n_new_states, 1)]
-            self.states += model.unbatch_h
+            self.states += self.model.unbatch_h
         else:
-            n_new_states = states.shape[self.batch_axis]
+            n_new_states = states.shape[self.input_batch_axis]
             new_states = [None for i in range(0, n_new_states, 1)]
             idx = [slice(0, states.shape[a], 1) for a in range(0, states.ndim, 1)]
             for i in range(0, n_new_states, 1):
-                idx[self.batch_axis] = slice(i, i + 1, 1)
+                idx[self.input_batch_axis] = slice(i, i + 1, 1)
                 new_states[i] = states[tuple(idx)]
             self.states += new_states
 
@@ -1016,7 +1015,9 @@ class ReplayMemory:
         return None
 
     def clear(self):
-        self.__init__(capacity=self.capacity, batch_size=self.batch_size, is_recurrent=self.is_recurrent)
+        self.__init__(
+            capacity=self.capacity, batch_size=self.batch_size, input_batch_axis=self.input_batch_axis,
+            action_batch_axis=self.action_batch_axis, is_recurrent=self.is_recurrent, model=self.model)
         return None
 
     def sample(self):
@@ -1030,33 +1031,43 @@ class ReplayMemory:
         next_states = []
         for i in range(0, self.batch_size, 1):
 
-            index = np.random.randint(low=0, high=self.current_len, size=1, dtype='i')[0].tolist()
+            index = np.random.randint(low=0, high=self.current_len, size=None, dtype='i').tolist()
 
             states.append(self.states.pop(index))
             actions.append(self.actions.pop(index))
             rewards.append(self.rewards.pop(index))
             next_states.append(self.next_states.pop(index))
 
+            if self.is_recurrent:
+                if next_states[i][0] is None:
+                    next_states[i][0] = torch.zeros(
+                        size=states[i][0].shape, device=states[i][0].device,
+                        dtype=states[i][0].dtype, requires_grad=False)
+            else:
+                if next_states[i] is None:
+                    next_states[i] = torch.zeros(
+                        size=states[i].shape, device=states[i].device, dtype=states[i].dtype, requires_grad=False)
+
             self.current_len = len(self.states)
 
         if self.is_recurrent:
             states = [
-                torch.cat([states[i][0] for i in range(0, self.batch_size, 1)], dim=0),
-                self.model.concatenate_hs([states[i][1] for i in range(0, self.batch_size, 1)], axis=0)]
+                torch.cat([states[i][0] for i in range(0, self.batch_size, 1)], dim=self.input_batch_axis),
+                self.model.concatenate_hs([states[i][1] for i in range(0, self.batch_size, 1)], axis=self.input_batch_axis)]
             device = states[0].device
             dtype = states[0].dtype
 
             next_states = [
-                torch.cat([next_states[i][0] for i in range(0, self.batch_size, 1)], dim=0),
-                self.model.concatenate_hs([next_states[i][1] for i in range(0, self.batch_size, 1)], axis=0)]
+                torch.cat([next_states[i][0] for i in range(0, self.batch_size, 1)], dim=self.input_batch_axis),
+                self.model.concatenate_hs([next_states[i][1] for i in range(0, self.batch_size, 1)], axis=self.input_batch_axis)]
             # todo: if lstm
         else:
-            states = torch.cat(states, dim=0)
-            next_states = torch.cat(next_states, dim=0)
+            states = torch.cat(states, dim=self.input_batch_axis)
+            next_states = torch.cat(next_states, dim=self.input_batch_axis)
             device = states.device
             dtype = states.dtype
 
-        actions = torch.cat(actions, dim=1)
+        actions = torch.cat(actions, dim=self.action_batch_axis)
         rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
 
         return dict(
