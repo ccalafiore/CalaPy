@@ -860,33 +860,33 @@ class DQNMethods(OutputMethods):
 
         return self.model
 
-    def _multi_agent_obs_to_deltas(self, observation_eit, ):
-
-        n_agents = len(observation_eit)
-
-        for a in range(0, n_agents, 1):
-
-            if observation_eit[a] is None:
-                hc_eit[a] = None
-                state_eit[a] = None
-                action_eit[a] = None
-                delta_ebt[a] = None
-            else:
-                if self.is_recurrent:
-                    if hc_eit[a] is None:
-                        hc_eit[a] = self.model.init_h(
-                            batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
-                    if state_eit[a] is None:
-                        state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
-                    values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
-                else:
-                    if state_eit[a] is None:
-                        state_eit[a] = copy.deepcopy(observation_eit[a])
-                    values_actions_eit = self.model(x=state_eit[a])
-
-                action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
-
-                delta_ebt[a] = self.compute_deltas(action_eit[a])
+    # def _multi_agent_obs_to_deltas(self, observation_eit, ):
+    #
+    #     n_agents = len(observation_eit)
+    #
+    #     for a in range(0, n_agents, 1):
+    #
+    #         if observation_eit[a] is None:
+    #             hc_eit[a] = None
+    #             state_eit[a] = None
+    #             action_eit[a] = None
+    #             delta_ebt[a] = None
+    #         else:
+    #             if self.is_recurrent:
+    #                 if hc_eit[a] is None:
+    #                     hc_eit[a] = self.model.init_h(
+    #                         batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+    #                 if state_eit[a] is None:
+    #                     state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
+    #                 values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
+    #             else:
+    #                 if state_eit[a] is None:
+    #                     state_eit[a] = copy.deepcopy(observation_eit[a])
+    #                 values_actions_eit = self.model(x=state_eit[a])
+    #
+    #             action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
+    #
+    #             delta_ebt[a] = self.compute_deltas(action_eit[a])
 
 
 class ReplayMemory:
@@ -950,7 +950,7 @@ class ReplayMemory:
             elif self.add_as == 'l':
                 self.add = self.add_list
             elif self.add_as == 't':
-                self.add = self.add_list
+                self.add = self.add_batch
             else:
                 raise ValueError('add_as')
         else:
@@ -1007,7 +1007,7 @@ class ReplayMemory:
         return None
 
     def add_batch(self, states, actions, rewards, next_states):
-        
+
         self.add_list(
             states=self.unbatch_states(states=states), actions=self.unbatch_actions(actions=actions),
             rewards=self.unbatch_rewards(rewards=rewards), next_states=self.unbatch_states(states=next_states))
