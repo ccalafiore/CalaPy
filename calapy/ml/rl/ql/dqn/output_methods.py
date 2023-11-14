@@ -393,8 +393,7 @@ class DQNMethods(OutputMethods):
 
         return deltas
 
-
-    def train(
+    def train_from_ind_agents(
             self, environment, optimizer,
             replay_memory_add_as, state_batch_axis, action_batch_axis, reward_batch_axis,
             U=10, E=None,
@@ -588,8 +587,6 @@ class DQNMethods(OutputMethods):
                     observation_eit = next_observation_eit
                     state_eit = copy.deepcopy(next_state_eit)
 
-                # print('episode={i:d}     t={t:d}'.format(i=i, t=t))
-
                 if j >= min_n_episodes_for_optim:
                     while ((replay_memory.current_len >= min_n_samples_for_optim) and
                            (replay_memory.current_len >= batch_size_of_train) and episodes_iterator.not_over):
@@ -694,13 +691,41 @@ class DQNMethods(OutputMethods):
                 state_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
                 action_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
                 delta_ebt = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
-                # hc_eit = None
-                # state_eit = None
+
+                cum_rewards = []  # type: list
+                time_lengths = []  # type: list
+
+                cum_rewards_i = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                time_lengths_i = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
                 obs_iterator = cp_rl_utilities.ObservationsIterator(T=T['validation'])
 
                 for t in obs_iterator:
 
+                    for a in range(0, environment['validation'].n_agents, 1):
+
+                        if observation_eit[a] is None:
+                            hc_eit[a] = None
+                            state_eit[a] = None
+                            action_eit[a] = None
+                            delta_ebt[a] = None
+
+                            time_lengths_i[a] = t
+                        else:
+                            if self.is_recurrent:
+                                if hc_eit[a] is None:
+                                    hc_eit[a] = self.model.init_h(
+                                        batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+                                if state_eit[a] is None:
+                                    state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
+                                values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
+                            else:
+                                if state_eit[a] is None:
+                                    state_eit[a] = copy.deepcopy(observation_eit[a])
+                                values_actions_eit = self.model(x=state_eit[a])
+
+                            action_eit[a] = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
+                            delta_ebt[a] = self.compute_deltas(action_eit[a])
 
                     next_observation_eit, reward_eit, obs_iterator.not_over = environment['validation'].step(
                         deltas=delta_ebt)
@@ -715,33 +740,19 @@ class DQNMethods(OutputMethods):
                         else:
                             next_state_eit = next_observation_eit
 
-                    observation_eit = next_observation_eit
-                    state_eit = copy.deepcopy(next_state_eit)
-
-                # print('episode={i:d}     t={t:d}'.format(i=i, t=t))
-
-
-                    if self.is_recurrent:
-                        next_values_actions_eb, next_hc_eb = self.model(x=next_states_eb[0], h=next_states_eb[1])
-                    else:
-                        next_values_actions_eb = self.model(x=next_states_eb)
-
                     expected_values_actions_eb = self.compute_expected_values_actions(
                         next_values_actions=next_values_actions_eb, rewards=rewards_eb)
 
 
-                    # forward
-                    # track history
-                    torch.set_grad_enabled(True)
-                    self.model.unfreeze()
-
-                    if self.is_recurrent:
-                        values_actions_eb, hc_eb = self.model(x=states_eb[0], h=states_eb[1])
-                    else:
-                        values_actions_eb = self.model(x=states_eb)
-
                     values_selected_actions_eb = self.gather_values_selected_actions(
                         values_actions=values_actions_eb, actions=actions_eb)
+
+
+                    observation_eit = next_observation_eit
+                    state_eit = copy.deepcopy(next_state_eit)
+
+
+
 
                     value_action_losses_eb = self.compute_value_action_losses(
                         values_selected_actions=values_selected_actions_eb,
@@ -751,11 +762,6 @@ class DQNMethods(OutputMethods):
                         value_action_losses=value_action_losses_eb, axes_not_included=None,
                         scaled=True, loss_scales_actors=None, format_scales=False)
 
-                    scaled_value_action_loss_eb.backward()
-                    optimizer.step()
-
-                    self.model.freeze()
-                    torch.set_grad_enabled(False)
 
                     n_selected_actions_eb = self.compute_n_selected_actions(
                         selected_actions=actions_eb, axes_not_included=None)
@@ -771,6 +777,12 @@ class DQNMethods(OutputMethods):
 
                     s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
                     j = 0
+
+                cum_rewards += cum_rewards_i
+                time_lengths += time_lengths_i
+
+
+
 
             loss_e = running_loss_e / running_n_selected_actions_e
             reward_e = running_rewards_e / running_n_rewards_e
@@ -806,7 +818,7 @@ class DQNMethods(OutputMethods):
                 lowest_loss_str = cp_strings.format_float_to_str(loss_e, n_decimals=n_decimals_for_printing)
 
                 stats['lines'][e][stats['headers']['Is_Lower_Validation_Loss']] = 1
-                # is_successful_epoch = True
+                is_successful_epoch = True
 
                 if os.path.isfile(directory_model_with_lowest_loss):
                     os.remove(directory_model_with_lowest_loss)
