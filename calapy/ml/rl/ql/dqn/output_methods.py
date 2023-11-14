@@ -581,10 +581,12 @@ class DQNMethods(OutputMethods):
                         else:
                             next_state_eit = next_observation_eit
 
-                    replay_memory.add(
-                        states=state_eit, actions=action_eit, next_states=next_state_eit, rewards=reward_eit)
+                    for a in range(0, environment['training'].n_agents, 1):
+                        if observation_eit[a] is not None:
+                            replay_memory.add(
+                                states=state_eit[a], actions=action_eit[a], next_states=next_state_eit[a], rewards=reward_eit[a])
 
-                    observation_eit = next_observation_eit
+                    observation_eit = copy.deepcopy(next_observation_eit)
                     state_eit = copy.deepcopy(next_state_eit)
 
                 if j >= min_n_episodes_for_optim:
@@ -1095,8 +1097,8 @@ class ReplayMemory:
 
     def sample(self):
 
-        if self.batch_size > self.capacity:
-            raise ValueError('self.batch_size > self.capacity')
+        if self.batch_size > self.current_len:
+            raise ValueError('self.batch_size > self.current_len')
 
         states = []
         actions = []
