@@ -602,7 +602,6 @@ class DQNMethods(OutputMethods):
                         rewards_eb = samples_eb['rewards']
                         next_states_eb = samples_eb['next_states']
 
-
                         if self.is_recurrent:
                             next_values_actions_eb, next_hc_eb = self.model(x=next_states_eb[0], h=next_states_eb[1])
                         else:
@@ -785,7 +784,6 @@ class DQNMethods(OutputMethods):
                     scaled_value_action_loss_eb = self.reduce_value_action_losses(
                         value_action_losses=value_action_losses_eb, axes_not_included=None,
                         scaled=True, loss_scales_actors=None, format_scales=False)
-
 
 
                     n_selected_actions_eb = self.compute_n_selected_actions(
