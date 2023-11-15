@@ -24,18 +24,18 @@ class DQNMethods(OutputMethods):
             gamma=0.999, reward_bias=0.0, loss_scales_actors=None, is_recurrent=False):
 
         """
-
+        :type model:
         :type axis_features_outs: int
         :type axis_models_losses: int
         :type possible_actions: list[list[int | float] | tuple[int | float]] |
                                 tuple[list[int | float] | tuple[int | float]]
         :type action_selection_type: str
         :type same_indexes_actions: int | list | tuple | np.ndarray | torch.Tensor | None
-        :type is_recurrent: bool | None
         :type gamma: int | float | None
         :type reward_bias: int | float | None
         :type loss_scales_actors: list[int | float] | tuple[int | float] |
                                   np.ndarray[int | float] | torch.Tensor[int | float] | float | int | None
+        :type is_recurrent: bool | None
         """
 
         superclass = DQNMethods
@@ -535,12 +535,21 @@ class DQNMethods(OutputMethods):
 
                 observation_eit = environment['training'].reset()
 
-                hc_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
-                state_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
+                if self.is_recurrent:
+                    hc_eit = [
+                        self.model.init_h(batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+                        for a in range(0, environment['training'].n_agents, 1)]  # type: list | None
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy([observation_eit[a], hc_eit[a]])
+                        for a in range(0, environment['training'].n_agents, 1)]  # type: list
+                else:
+                    hc_eit = None
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy(observation_eit[a])
+                        for a in range(0, environment['training'].n_agents, 1)]  # type: list
+
                 action_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
                 delta_ebt = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
-                # hc_eit = None
-                # state_eit = None
 
                 obs_iterator = cp_rl_utilities.ObservationsIterator(T=T['training'])
 
@@ -548,22 +557,14 @@ class DQNMethods(OutputMethods):
 
                     for a in range(0, environment['training'].n_agents, 1):
 
-                        if observation_eit[a] is None:
+                        if state_eit[a] is None:
                             hc_eit[a] = None
-                            state_eit[a] = None
                             action_eit[a] = None
                             delta_ebt[a] = None
                         else:
                             if self.is_recurrent:
-                                if hc_eit[a] is None:
-                                    hc_eit[a] = self.model.init_h(
-                                        batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
-                                if state_eit[a] is None:
-                                    state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
                                 values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
                             else:
-                                if state_eit[a] is None:
-                                    state_eit[a] = copy.deepcopy(observation_eit[a])
                                 values_actions_eit = self.model(x=state_eit[a])
 
                             action_eit[a] = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
@@ -577,7 +578,8 @@ class DQNMethods(OutputMethods):
                     else:
                         if self.is_recurrent:
                             next_state_eit = [
-                                [next_observation_eit[a], hc_eit[a]] for a in range(0, environment['training'].n_agents, 1)]
+                                [next_observation_eit[a], hc_eit[a]]
+                                for a in range(0, environment['training'].n_agents, 1)]
                         else:
                             next_state_eit = next_observation_eit
 
@@ -587,7 +589,9 @@ class DQNMethods(OutputMethods):
                                 states=state_eit[a], actions=action_eit[a], next_states=next_state_eit[a], rewards=reward_eit[a])
 
                     observation_eit = copy.deepcopy(next_observation_eit)
-                    state_eit = copy.deepcopy(next_state_eit)
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
+                        for a in range(0, environment['training'].n_agents, 1)]  # type: list
 
                 if j >= min_n_episodes_for_optim:
                     while ((replay_memory.current_len >= min_n_samples_for_optim) and
@@ -689,8 +693,19 @@ class DQNMethods(OutputMethods):
 
                 observation_eit = environment['validation'].reset()
 
-                hc_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
-                state_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                if self.is_recurrent:
+                    hc_eit = [
+                        self.model.init_h(batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list | None
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy([observation_eit[a], hc_eit[a]])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                else:
+                    hc_eit = None
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy(observation_eit[a])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+
                 action_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
                 delta_ebt = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
@@ -706,24 +721,16 @@ class DQNMethods(OutputMethods):
 
                     for a in range(0, environment['validation'].n_agents, 1):
 
-                        if observation_eit[a] is None:
+                        if state_eit[a] is None:
                             hc_eit[a] = None
-                            state_eit[a] = None
                             action_eit[a] = None
                             delta_ebt[a] = None
 
                             time_lengths_i[a] = t
                         else:
                             if self.is_recurrent:
-                                if hc_eit[a] is None:
-                                    hc_eit[a] = self.model.init_h(
-                                        batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
-                                if state_eit[a] is None:
-                                    state_eit[a] = copy.deepcopy([observation_eit[a], hc_eit[a]])
                                 values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
                             else:
-                                if state_eit[a] is None:
-                                    state_eit[a] = copy.deepcopy(observation_eit[a])
                                 values_actions_eit = self.model(x=state_eit[a])
 
                             action_eit[a] = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
@@ -737,8 +744,8 @@ class DQNMethods(OutputMethods):
                     else:
                         if self.is_recurrent:
                             next_state_eit = [
-                                [next_observation_eit[a], hc_eit[a]] for a in
-                                range(0, environment['validation'].n_agents, 1)]
+                                [next_observation_eit[a], hc_eit[a]]
+                                for a in range(0, environment['validation'].n_agents, 1)]
                         else:
                             next_state_eit = next_observation_eit
 
@@ -750,10 +757,10 @@ class DQNMethods(OutputMethods):
                         values_actions=values_actions_eb, actions=actions_eb)
 
 
-                    observation_eit = next_observation_eit
-                    state_eit = copy.deepcopy(next_state_eit)
-
-
+                    observation_eit = copy.deepcopy(next_observation_eit)
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
 
                     value_action_losses_eb = self.compute_value_action_losses(
