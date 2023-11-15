@@ -544,9 +544,7 @@ class DQNMethods(OutputMethods):
                         for a in range(0, environment['training'].n_agents, 1)]  # type: list
                 else:
                     hc_eit = None
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy(observation_eit[a])
-                        for a in range(0, environment['training'].n_agents, 1)]  # type: list
+                    state_eit = copy.deepcopy(observation_eit)
 
                 action_eit = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
                 delta_ebt = [None for a in range(0, environment['training'].n_agents, 1)]  # type: list
@@ -581,12 +579,13 @@ class DQNMethods(OutputMethods):
                                 [next_observation_eit[a], hc_eit[a]]
                                 for a in range(0, environment['training'].n_agents, 1)]
                         else:
-                            next_state_eit = next_observation_eit
+                            next_state_eit = copy.deepcopy(next_observation_eit)
 
                     for a in range(0, environment['training'].n_agents, 1):
-                        if observation_eit[a] is not None:
+                        if state_eit[a] is not None:
                             replay_memory.add(
-                                states=state_eit[a], actions=action_eit[a], next_states=next_state_eit[a], rewards=reward_eit[a])
+                                states=state_eit[a], actions=action_eit[a], rewards=reward_eit[a],
+                                next_states=next_state_eit[a])
 
                     observation_eit = copy.deepcopy(next_observation_eit)
                     state_eit = [
@@ -600,8 +599,9 @@ class DQNMethods(OutputMethods):
                         samples_eb = replay_memory.sample()
                         states_eb = samples_eb['states']
                         actions_eb = samples_eb['actions']
-                        next_states_eb = samples_eb['next_states']
                         rewards_eb = samples_eb['rewards']
+                        next_states_eb = samples_eb['next_states']
+
 
                         if self.is_recurrent:
                             next_values_actions_eb, next_hc_eb = self.model(x=next_states_eb[0], h=next_states_eb[1])
@@ -644,7 +644,7 @@ class DQNMethods(OutputMethods):
                             selected_actions=actions_eb, axes_not_included=None)
 
                         n_rewards_eb = self.compute_n_selected_actions(
-                            selected_actions=actions_eb, axes_not_included=None)
+                            selected_actions=rewards_eb, axes_not_included=None)
 
                         running_n_selected_actions_e += n_selected_actions_eb
                         running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
@@ -700,90 +700,99 @@ class DQNMethods(OutputMethods):
 
                 if self.is_recurrent:
                     hc_eit = [
-                        self.model.init_h(batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
+                        None if observation_eit[a] is None else self.model.init_h(
+                            batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
                         for a in range(0, environment['validation'].n_agents, 1)]  # type: list | None
+
                     state_eit = [
                         None if observation_eit[a] is None else copy.deepcopy([observation_eit[a], hc_eit[a]])
                         for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+
+                    values_actions_eit = [
+                        None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                    for a in range(0, environment['validation'].n_agents, 1):
+                        if state_eit[a] is not None:
+                            values_actions_eit[a], hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
                 else:
                     hc_eit = None
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy(observation_eit[a])
+                    state_eit = copy.deepcopy(observation_eit)
+
+                    values_actions_eit = [
+                        None if state_eit[a] is None else self.model(x=state_eit[a])
                         for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
-                action_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
-                delta_ebt = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
-
-                cum_rewards_i = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                cum_rewards_i = [0.0 for a in range(0, environment['validation'].n_agents, 1)]  # type: list
                 time_lengths_i = [0 for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
                 obs_iterator = cp_rl_utilities.ObservationsIterator(T=T['validation'])
 
                 for t in obs_iterator:
 
-                    for a in range(0, environment['validation'].n_agents, 1):
+                    action_eit = [
+                        None if values_actions_eit[a] is None
+                        else self.q_values_to_actions(values_actions=values_actions_eit[a])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
-                        if state_eit[a] is None:
-                            hc_eit[a] = None
-                            action_eit[a] = None
-                            delta_ebt[a] = None
-
-                        else:
-                            if self.is_recurrent:
-                                values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
-                            else:
-                                values_actions_eit = self.model(x=state_eit[a])
-
-                            action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
-                            delta_ebt[a] = self.compute_deltas(action_eit[a])
+                    delta_ebt = [
+                        None if action_eit[a] is None else self.compute_deltas(action_eit[a])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
                     next_observation_eit, reward_eit, obs_iterator.not_over = environment['validation'].step(
                         deltas=delta_ebt)
-
-                    if next_observation_eit is None:
-                        next_state_eit = None
-                    else:
-                        if self.is_recurrent:
-                            next_state_eit = [
-                                [next_observation_eit[a], hc_eit[a]]
-                                for a in range(0, environment['validation'].n_agents, 1)]
-                        else:
-                            next_state_eit = next_observation_eit
 
                     for a in range(0, environment['validation'].n_agents, 1):
                         if state_eit[a] is not None:
                             time_lengths_i[a] += 1
                             cum_rewards_i[a] += reward_eit[a].squeeze(dim=reward_batch_axis).tolist()
 
-                    expected_values_actions_eb = self.compute_expected_values_actions(
-                        next_values_actions=next_values_actions_eb, rewards=rewards_eb)
+                    values_selected_actions_eit = self.gather_values_selected_actions(
+                        values_actions=values_actions_eit, actions=action_eit)
 
+                    next_observation_with_zeros_eit = [
+                        None if observation_eit[a] is None
+                        else torch.zeros(
+                            size=observation_eit[a].shape, device=observation_eit[a].device,
+                            dtype=observation_eit[a].dtype, requires_grad=False) if next_observation_eit[a] is None
+                        else next_observation_eit[a] for a in range(0, environment['validation'].n_agents, 1)]
 
-                    values_selected_actions_eb = self.gather_values_selected_actions(
-                        values_actions=values_actions_eb, actions=actions_eb)
+                    if self.is_recurrent:
 
+                        next_state_eit = [
+                            None if next_observation_with_zeros_eit[a] is None
+                            else copy.deepcopy([next_observation_with_zeros_eit[a], hc_eit[a]])
+                            for a in range(0, environment['validation'].n_agents, 1)]
 
-                    observation_eit = copy.deepcopy(next_observation_eit)
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
-                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                        next_values_actions_eit = [
+                            None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                        for a in range(0, environment['validation'].n_agents, 1):
+                            if next_state_eit[a] is not None:
+                                next_values_actions_eit[a], hc_eit[a] = self.model(
+                                    x=next_state_eit[a][0], h=next_state_eit[a][1])
+                    else:
+                        next_state_eit = copy.deepcopy(next_observation_with_zeros_eit)
 
+                        next_values_actions_eit = [
+                            None if next_state_eit[a] is None else self.model(x=next_state_eit[a])
+                            for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
+                    expected_values_actions_eit = self.compute_expected_values_actions(
+                        next_values_actions=next_values_actions_eit, rewards=reward_eit)
 
                     value_action_losses_eb = self.compute_value_action_losses(
-                        values_selected_actions=values_selected_actions_eb,
-                        expected_values_actions=expected_values_actions_eb)
+                        values_selected_actions=values_selected_actions_eit,
+                        expected_values_actions=expected_values_actions_eit)
 
                     scaled_value_action_loss_eb = self.reduce_value_action_losses(
                         value_action_losses=value_action_losses_eb, axes_not_included=None,
                         scaled=True, loss_scales_actors=None, format_scales=False)
 
 
+
                     n_selected_actions_eb = self.compute_n_selected_actions(
-                        selected_actions=actions_eb, axes_not_included=None)
+                        selected_actions=action_eit, axes_not_included=None)
 
                     n_rewards_eb = self.compute_n_selected_actions(
-                        selected_actions=actions_eb, axes_not_included=None)
+                        selected_actions=action_eit, axes_not_included=None)
 
                     running_n_selected_actions_e += n_selected_actions_eb
                     running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
@@ -791,13 +800,19 @@ class DQNMethods(OutputMethods):
                     running_n_rewards_e += n_rewards_eb
                     running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
 
-                    running_n_episodes = sum(len(time_lengths_i), start=running_n_episodes)
+                    running_n_episodes += len(time_lengths_i)
                     running_sum_time_lengths = sum(time_lengths_i, start=running_sum_time_lengths)
 
                     running_sum_cum_rewards = sum(cum_rewards_i, start=running_sum_cum_rewards)
 
+                    observation_eit = copy.deepcopy(next_observation_eit)
+                    state_eit = [
+                        None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
-
+                    values_actions_eit = [
+                        None if state_eit[a] is None else copy.deepcopy(next_values_actions_eit[a])
+                        for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
                     s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
                     j = 0
