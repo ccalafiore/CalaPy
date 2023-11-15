@@ -734,7 +734,7 @@ class DQNMethods(OutputMethods):
                             else:
                                 values_actions_eit = self.model(x=state_eit[a])
 
-                            action_eit[a] = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
+                            action_eit[a] = self.q_values_to_actions(values_actions=values_actions_eit)
                             delta_ebt[a] = self.compute_deltas(action_eit[a])
 
                     next_observation_eit, reward_eit, obs_iterator.not_over = environment['validation'].step(
