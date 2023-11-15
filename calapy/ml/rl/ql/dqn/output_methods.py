@@ -681,10 +681,15 @@ class DQNMethods(OutputMethods):
             self.model.eval()
 
             running_n_selected_actions_e = 0
-            running_loss_e = 0.0
+            running_sum_losses_e = 0.0
 
             running_n_rewards_e = 0
-            running_rewards_e = 0.0
+            running_sum_rewards_e = 0.0
+
+            running_n_episodes = 0
+
+            running_sum_cum_rewards = 0.0
+            running_sum_time_lengths = 0
 
             s = 0
             episodes_iterator = cp_rl_utilities.ValEpisodesIterator(n_episodes=n_episodes_per_val_phase)
@@ -709,11 +714,8 @@ class DQNMethods(OutputMethods):
                 action_eit = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
                 delta_ebt = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
-                cum_rewards = []  # type: list
-                time_lengths = []  # type: list
-
                 cum_rewards_i = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
-                time_lengths_i = [None for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+                time_lengths_i = [0 for a in range(0, environment['validation'].n_agents, 1)]  # type: list
 
                 obs_iterator = cp_rl_utilities.ObservationsIterator(T=T['validation'])
 
@@ -726,7 +728,6 @@ class DQNMethods(OutputMethods):
                             action_eit[a] = None
                             delta_ebt[a] = None
 
-                            time_lengths_i[a] = t
                         else:
                             if self.is_recurrent:
                                 values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
@@ -749,6 +750,11 @@ class DQNMethods(OutputMethods):
                         else:
                             next_state_eit = next_observation_eit
 
+                    for a in range(0, environment['validation'].n_agents, 1):
+                        if state_eit[a] is not None:
+                            time_lengths_i[a] += 1
+                            cum_rewards_i[a] += reward_eit[a].squeeze(dim=reward_batch_axis).tolist()
+
                     expected_values_actions_eb = self.compute_expected_values_actions(
                         next_values_actions=next_values_actions_eb, rewards=rewards_eb)
 
@@ -761,6 +767,7 @@ class DQNMethods(OutputMethods):
                     state_eit = [
                         None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
                         for a in range(0, environment['validation'].n_agents, 1)]  # type: list
+
 
 
                     value_action_losses_eb = self.compute_value_action_losses(
@@ -784,14 +791,22 @@ class DQNMethods(OutputMethods):
                     running_n_rewards_e += n_rewards_eb
                     running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
 
+                    running_n_episodes = sum(len(time_lengths_i), start=running_n_episodes)
+                    running_sum_time_lengths = sum(time_lengths_i, start=running_sum_time_lengths)
+
+                    running_sum_cum_rewards = sum(cum_rewards_i, start=running_sum_cum_rewards)
+
+
+
+
                     s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
                     j = 0
 
-                cum_rewards += cum_rewards_i
-                time_lengths += time_lengths_i
 
+            time_lengths_per_episode = running_sum_time_lengths / running_n_episodes
+            cum_rewards_per_episode = running_sum_cum_rewards / running_n_episodes
 
-
+            reward_per_timepoint = running_sum_cum_rewards / running_sum_time_lengths
 
             loss_e = running_loss_e / running_n_selected_actions_e
             reward_e = running_rewards_e / running_n_rewards_e
