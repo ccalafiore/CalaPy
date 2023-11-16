@@ -790,7 +790,7 @@ class DQNMethods(OutputMethods):
                         selected_actions=action_eit, axes_not_included=None)
 
                     n_rewards_eb = self.compute_n_selected_actions(
-                        selected_actions=action_eit, axes_not_included=None)
+                        selected_actions=reward_eit, axes_not_included=None)
 
                     running_n_selected_actions_e += n_selected_actions_eb
                     running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
@@ -955,7 +955,7 @@ class ReplayMemory:
                        some batched observations
         :type state_batch_axis: int
         :type action_batch_axis: int
-        :type reward_batch_axis: int
+        :type reward_batch_axis: int | None
 
         :type add_as: str
         :type is_recurrent: bool
@@ -987,7 +987,7 @@ class ReplayMemory:
         else:
             raise TypeError('action_batch_axis')
 
-        if isinstance(reward_batch_axis, int):
+        if reward_batch_axis is None or isinstance(reward_batch_axis, int):
             self.reward_batch_axis = reward_batch_axis
         else:
             raise TypeError('reward_batch_axis')
@@ -1094,7 +1094,10 @@ class ReplayMemory:
         return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
 
     def unbatch_rewards(self, rewards):
-        return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
+        if self.reward_batch_axis is None:
+            return rewards
+        else:
+            return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
 
     def _unbatch(self, samples, batch_axis):
 
@@ -1179,8 +1182,10 @@ class ReplayMemory:
 
         actions = torch.cat(actions, dim=self.action_batch_axis)
 
-        rewards = torch.cat(rewards, dim=self.reward_batch_axis)
-        # rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
+        if self.reward_batch_axis is None:
+            rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
+        else:
+            rewards = torch.cat(rewards, dim=self.reward_batch_axis)
 
         return dict(states=states, actions=actions, rewards=rewards, next_states=next_states)
 
@@ -1258,5 +1263,3 @@ class TimedDQNMethods(DQNMethods, TimedOutputMethods):
                 values_actions_out[a] = values_actions[a][tuple_indexes_a]
 
         return values_actions_out
-
-
