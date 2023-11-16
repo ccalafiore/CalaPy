@@ -405,6 +405,7 @@ class DQNMethods(OutputMethods):
         cp_timer = cp_clock.Timer()
 
         phases_names = ('training', 'validation')
+        n_phases = len(phases_names)
         phases_titles = tuple(phase_name_p.title() for phase_name_p in phases_names)
         for key_environment_k in environment.keys():
             if key_environment_k in phases_names:
@@ -517,355 +518,391 @@ class DQNMethods(OutputMethods):
             stats['lines'][e][stats['headers']['Epoch']] = e
 
             # Each Training Epoch has a training and a validation phase
-            # training phase
-            p = 0
-            phase_name_p = phases_names[p]
-            phase_title_p = phases_titles[p]
+            for p in range(0, n_phases, 1):
 
-            self.model.train()
+                phase_name_p = phases_names[p]
+                phase_title_p = phases_titles[p]
 
-            running_n_selected_actions_e = 0
-            running_loss_e = 0.0
+                self.model.train()
 
-            running_n_rewards_e = 0
-            running_rewards_e = 0.0
+                running_n_selected_actions_ep = 0
+                running_loss_ep = 0.0
 
-            s = 0
-            episodes_iterator = cp_rl_utilities.TrainEpisodesIterator(
-                tot_observations_per_epoch=tot_observations_per_train_phase)
+                running_n_rewards_ep = 0
+                running_rewards_ep = 0.0
 
-            for i, j in episodes_iterator:
+                b = 0
+                j = 0
+                i = 0
+                s = 0
 
-                observation_eit = environment[phase_name_p].reset()
-
-                if self.is_recurrent:
-                    hc_eit = [
-                        self.model.init_h(batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy([observation_eit[a], hc_eit[a]])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                if phase_name_p == 'training':
+                    are_more_episodes_needed = s < tot_observations_per_train_phase
                 else:
-                    hc_eit = None
-                    state_eit = copy.deepcopy(observation_eit)
+                    are_more_episodes_needed = i < n_episodes_per_val_phase
 
-                action_eit = [None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                delta_eit = [None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                while are_more_episodes_needed:
 
-                obs_iterator = cp_rl_utilities.ObservationsIterator(T=T[phase_name_p])
-
-                for t in obs_iterator:
-
-                    for a in range(0, environment[phase_name_p].n_agents, 1):
-
-                        if state_eit[a] is None:
-                            hc_eit[a] = None
-                            action_eit[a] = None
-                            delta_eit[a] = None
-                        else:
-                            if self.is_recurrent:
-                                values_actions_eit, hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
-                            else:
-                                values_actions_eit = self.model(x=state_eit[a])
-
-                            action_eit[a] = self.sample_action(values_actions=values_actions_eit, epsilon=epsilon)
-                            delta_eit[a] = self.compute_deltas(action_eit[a])
-
-                    next_observation_eit, reward_eit, obs_iterator.not_over = environment[phase_name_p].step(
-                        deltas=delta_eit)
-
-                    if next_observation_eit is None:
-                        next_state_eit = None
-                    else:
-                        if self.is_recurrent:
-                            next_state_eit = [
-                                [next_observation_eit[a], hc_eit[a]]
-                                for a in range(0, environment[phase_name_p].n_agents, 1)]
-                        else:
-                            next_state_eit = copy.deepcopy(next_observation_eit)
-
-                    for a in range(0, environment[phase_name_p].n_agents, 1):
-                        if state_eit[a] is not None:
-                            replay_memory.add(
-                                states=state_eit[a], actions=action_eit[a], rewards=reward_eit[a],
-                                next_states=next_state_eit[a])
-
-                    observation_eit = copy.deepcopy(next_observation_eit)
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
-                if j >= min_n_episodes_for_optim:
-                    while ((replay_memory.current_len >= min_n_samples_for_optim) and
-                           (replay_memory.current_len >= batch_size_of_train) and episodes_iterator.not_over):
-
-                        samples_eb = replay_memory.sample()
-                        states_eb = samples_eb['states']
-                        actions_eb = samples_eb['actions']
-                        rewards_eb = samples_eb['rewards']
-                        next_states_eb = samples_eb['next_states']
-
-                        if self.is_recurrent:
-                            next_values_actions_eb, next_hc_eb = self.model(x=next_states_eb[0], h=next_states_eb[1])
-                        else:
-                            next_values_actions_eb = self.model(x=next_states_eb)
-
-                        expected_values_actions_eb = self.compute_expected_values_actions(
-                            next_values_actions=next_values_actions_eb, rewards=rewards_eb)
-
-                        optimizer.zero_grad()
-
-                        # forward
-                        # track history
-                        torch.set_grad_enabled(True)
-                        self.model.unfreeze()
-
-                        if self.is_recurrent:
-                            values_actions_eb, hc_eb = self.model(x=states_eb[0], h=states_eb[1])
-                        else:
-                            values_actions_eb = self.model(x=states_eb)
-
-                        values_selected_actions_eb = self.gather_values_selected_actions(
-                            values_actions=values_actions_eb, actions=actions_eb)
-
-                        value_action_losses_eb = self.compute_value_action_losses(
-                            values_selected_actions=values_selected_actions_eb,
-                            expected_values_actions=expected_values_actions_eb)
-
-                        scaled_value_action_loss_eb = self.reduce_value_action_losses(
-                            value_action_losses=value_action_losses_eb, axes_not_included=None,
-                            scaled=True, loss_scales_actors=None, format_scales=False)
-
-                        scaled_value_action_loss_eb.backward()
-                        optimizer.step()
-
-                        self.model.freeze()
-                        torch.set_grad_enabled(False)
-
-                        n_selected_actions_eb = self.compute_n_selected_actions(
-                            selected_actions=actions_eb, axes_not_included=None)
-
-                        n_rewards_eb = self.compute_n_selected_actions(
-                            selected_actions=rewards_eb, axes_not_included=None)
-
-                        running_n_selected_actions_e += n_selected_actions_eb
-                        running_loss_e += (scaled_value_action_loss_eb.item() * n_selected_actions_eb)
-
-                        running_n_rewards_e += n_rewards_eb
-                        running_rewards_e += rewards_eb.sum(dim=None, keepdim=False, dtype=None).item()
-
-                        s, b = episodes_iterator.count_observations(n_new_observations=replay_memory.batch_size)
-                        j = 0
-
-            loss_e = running_loss_e / running_n_selected_actions_e
-            reward_e = running_rewards_e / running_n_rewards_e
-
-            stats['lines'][e][stats['headers']['{phase:s}_Loss'.format(phase=phase_title_p)]] = loss_e
-            stats['lines'][e][stats['headers']['{phase:s}_Reward_Per_Observation'.format(
-                phase=phase_title_p)]] = reward_e
-
-            loss_str_e = cp_strings.format_float_to_str(loss_e, n_decimals=n_decimals_for_printing)
-            reward_str_e = cp_strings.format_float_to_str(reward_e, n_decimals=n_decimals_for_printing)
-
-            print('Epoch: {e:d}. Training. Value Action Loss: {loss:s}. Reward per Observation {reward:s}'.format(
-                e=e, loss=loss_str_e, reward=reward_str_e))
-
-            epsilon = epsilon + epsilon_step
-            if epsilon < epsilon_end:
-                epsilon = epsilon_end
-
-
-
-
-
-
-            # validation phase
-
-            p = 1
-            phase_name_p = phases_names[p]
-            phase_title_p = phases_titles[p]
-
-            self.model.eval()
-
-            running_n_selected_actions_e = 0
-            running_sum_losses_e = 0.0
-
-            running_n_rewards_e = 0
-            running_sum_rewards_e = 0.0
-
-            running_n_episodes = 0
-
-            running_sum_cum_rewards = 0.0
-            running_sum_time_lengths = 0
-
-            s = 0
-            episodes_iterator = cp_rl_utilities.ValEpisodesIterator(n_episodes=n_episodes_per_val_phase)
-
-            for i in episodes_iterator:
-
-                observation_eit = environment[phase_name_p].reset()
-
-                if self.is_recurrent:
-                    hc_eit = [
-                        None if observation_eit[a] is None else self.model.init_h(
-                            batch_shape=self.model.get_batch_shape(input_shape=observation_eit[a].shape))
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
-
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy([observation_eit[a], hc_eit[a]])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
-                    values_actions_eit = [
-                        None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                    for a in range(0, environment[phase_name_p].n_agents, 1):
-                        if state_eit[a] is not None:
-                            values_actions_eit[a], hc_eit[a] = self.model(x=state_eit[a][0], h=state_eit[a][1])
-                else:
-                    hc_eit = None
-                    state_eit = copy.deepcopy(observation_eit)
-
-                    values_actions_eit = [
-                        None if state_eit[a] is None else self.model(x=state_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
-                cum_rewards_i = [0.0 for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                time_lengths_i = [0 for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
-                obs_iterator = cp_rl_utilities.ObservationsIterator(T=T[phase_name_p])
-
-                for t in obs_iterator:
-
-                    action_eit = [
-                        None if values_actions_eit[a] is None
-                        else self.q_values_to_actions(values_actions=values_actions_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
-                    delta_eit = [
-                        None if action_eit[a] is None else self.compute_deltas(action_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
-                    next_observation_eit, reward_eit, obs_iterator.not_over = environment[phase_name_p].step(
-                        deltas=delta_eit)
-
-                    for a in range(0, environment[phase_name_p].n_agents, 1):
-                        if state_eit[a] is not None:
-                            time_lengths_i[a] += 1
-                            if reward_batch_axis is None:
-                                cum_rewards_i[a] += reward_eit[a]
-                            else:
-                                cum_rewards_i[a] += reward_eit[a].squeeze(dim=reward_batch_axis).tolist()
-
-                    # values_selected_actions_eit = [
-                    #     None if values_actions_eit[a] is None
-                    #     else self.gather_values_selected_actions(values_actions=values_actions_eit[a], actions=action_eit[a])
-                    #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                    values_selected_actions_eit = torch.cat([
-                        self.gather_values_selected_actions(values_actions=values_actions_eit[a], actions=action_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1) if values_actions_eit[a] is not None],
-                        dim=action_batch_axis)
-
-                    next_observation_with_zeros_eit = [
-                        None if observation_eit[a] is None
-                        else torch.zeros(
-                            size=observation_eit[a].shape, device=observation_eit[a].device,
-                            dtype=observation_eit[a].dtype, requires_grad=False) if next_observation_eit[a] is None
-                        else next_observation_eit[a] for a in range(0, environment[phase_name_p].n_agents, 1)]
+                    observation_epit = environment[phase_name_p].reset()
 
                     if self.is_recurrent:
-
-                        next_state_eit = [
-                            None if next_observation_with_zeros_eit[a] is None
-                            else copy.deepcopy([next_observation_with_zeros_eit[a], hc_eit[a]])
-                            for a in range(0, environment[phase_name_p].n_agents, 1)]
-
-                        next_values_actions_eit = [
-                            None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                        for a in range(0, environment[phase_name_p].n_agents, 1):
-                            if next_state_eit[a] is not None:
-                                next_values_actions_eit[a], hc_eit[a] = self.model(
-                                    x=next_state_eit[a][0], h=next_state_eit[a][1])
+                        hc_epit = [
+                            self.model.init_h(batch_shape=self.model.get_batch_shape(
+                                input_shape=observation_epit[a].shape))
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
+                        state_epit = [
+                            None if observation_epit[a] is None else copy.deepcopy([observation_epit[a], hc_epit[a]])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
                     else:
-                        next_state_eit = copy.deepcopy(next_observation_with_zeros_eit)
+                        hc_epit = None
+                        state_epit = copy.deepcopy(observation_epit)
 
-                        next_values_actions_eit = [
-                            None if next_state_eit[a] is None else self.model(x=next_state_eit[a])
+                    action_epit = [None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                    delta_epit = [None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+
+                    obs_iterator = cp_rl_utilities.ObservationsIterator(T=T[phase_name_p])
+
+                    for t in obs_iterator:
+
+                        for a in range(0, environment[phase_name_p].n_agents, 1):
+
+                            if state_epit[a] is None:
+                                hc_epit[a] = None
+                                action_epit[a] = None
+                                delta_epit[a] = None
+                            else:
+                                if self.is_recurrent:
+                                    values_actions_epit, hc_epit[a] = self.model(x=state_epit[a][0], h=state_epit[a][1])
+                                else:
+                                    values_actions_epit = self.model(x=state_epit[a])
+
+                                action_epit[a] = self.sample_action(values_actions=values_actions_epit, epsilon=epsilon)
+                                delta_epit[a] = self.compute_deltas(action_epit[a])
+
+                        next_observation_epit, reward_epit, obs_iterator.not_over = environment[phase_name_p].step(
+                            deltas=delta_epit)
+
+                        if next_observation_epit is None:
+                            next_state_epit = None
+                        else:
+                            if self.is_recurrent:
+                                next_state_epit = [
+                                    [next_observation_epit[a], hc_epit[a]]
+                                    for a in range(0, environment[phase_name_p].n_agents, 1)]
+                            else:
+                                next_state_epit = copy.deepcopy(next_observation_epit)
+
+                        for a in range(0, environment[phase_name_p].n_agents, 1):
+                            if state_epit[a] is not None:
+                                replay_memory.add(
+                                    states=state_epit[a], actions=action_epit[a], rewards=reward_epit[a],
+                                    next_states=next_state_epit[a])
+
+                        observation_epit = copy.deepcopy(next_observation_epit)
+                        state_epit = [
+                            None if observation_epit[a] is None else copy.deepcopy(next_state_epit[a])
                             for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
 
-                    # expected_values_actions_eit = [
-                    #     None if next_values_actions_eit[a] is None else
-                    #     self.compute_expected_values_actions(
-                    #         next_values_actions=next_values_actions_eit[a], rewards=reward_eit[a])
-                    #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                    expected_values_actions_eit = torch.cat([
-                        self.compute_expected_values_actions(
-                            next_values_actions=next_values_actions_eit[a], rewards=reward_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)
-                        if next_values_actions_eit[a] is not None],
-                        dim=action_batch_axis)
+                    was_not_optimised = True
+                    if (phase_name_p == 'training') and (j >= min_n_episodes_for_optim):
+                        while ((replay_memory.current_len >= min_n_samples_for_optim) and
+                               (replay_memory.current_len >= batch_size_of_train) and are_more_episodes_needed):
+
+                            samples_epb = replay_memory.sample()
+                            states_epb = samples_epb['states']
+                            actions_epb = samples_epb['actions']
+                            rewards_epb = samples_epb['rewards']
+                            next_states_epb = samples_epb['next_states']
+
+                            if self.is_recurrent:
+                                next_values_actions_epb, next_hc_epb = self.model(
+                                    x=next_states_epb[0], h=next_states_epb[1])
+                            else:
+                                next_values_actions_epb = self.model(x=next_states_epb)
+
+                            expected_values_actions_epb = self.compute_expected_values_actions(
+                                next_values_actions=next_values_actions_epb, rewards=rewards_epb)
+
+                            optimizer.zero_grad()
+
+                            # forward
+                            # track history
+                            torch.set_grad_enabled(True)
+                            self.model.unfreeze()
+
+                            if self.is_recurrent:
+                                values_actions_epb, hc_epb = self.model(x=states_epb[0], h=states_epb[1])
+                            else:
+                                values_actions_epb = self.model(x=states_epb)
+
+                            values_selected_actions_epb = self.gather_values_selected_actions(
+                                values_actions=values_actions_epb, actions=actions_epb)
+
+                            value_action_losses_epb = self.compute_value_action_losses(
+                                values_selected_actions=values_selected_actions_epb,
+                                expected_values_actions=expected_values_actions_epb)
+
+                            scaled_value_action_loss_epb = self.reduce_value_action_losses(
+                                value_action_losses=value_action_losses_epb, axes_not_included=None,
+                                scaled=True, loss_scales_actors=None, format_scales=False)
+
+                            scaled_value_action_loss_epb.backward()
+                            optimizer.step()
+
+                            self.model.freeze()
+                            torch.set_grad_enabled(False)
+
+                            # n_selected_actions_epb = self.compute_n_selected_actions(
+                            #     selected_actions=actions_epb, axes_not_included=None)
+                            #
+                            # n_rewards_epb = self.compute_n_selected_actions(
+                            #     selected_actions=rewards_epb, axes_not_included=None)
+                            #
+                            # running_n_selected_actions_ep += n_selected_actions_epb
+                            # running_loss_ep += (scaled_value_action_loss_epb.item() * n_selected_actions_epb)
+                            #
+                            # running_n_rewards_ep += n_rewards_epb
+                            # running_rewards_ep += rewards_epb.sum(dim=None, keepdim=False, dtype=None).item()
+
+                            was_not_optimised = False
+
+                            j = 0
+                            b += 1
+                            s += replay_memory.batch_size
+
+                            are_more_episodes_needed = s < tot_observations_per_train_phase
+
+                    if was_not_optimised:
+                        j += 1
+                    i += 1
+
+                loss_ep = running_loss_ep / running_n_selected_actions_ep
+                reward_ep = running_rewards_ep / running_n_rewards_ep
+
+                stats['lines'][e][stats['headers']['{phase:s}_Loss'.format(phase=phase_title_p)]] = loss_ep
+                stats['lines'][e][stats['headers']['{phase:s}_Reward_Per_Observation'.format(
+                    phase=phase_title_p)]] = reward_ep
+
+                loss_str_ep = cp_strings.format_float_to_str(loss_ep, n_decimals=n_decimals_for_printing)
+                reward_str_ep = cp_strings.format_float_to_str(reward_ep, n_decimals=n_decimals_for_printing)
+
+                print('Epoch: {e:d}. Training. Value Action Loss: {loss:s}. Reward per Observation {reward:s}'.format(
+                    e=e, loss=loss_str_ep, reward=reward_str_ep))
+
+                epsilon = epsilon + epsilon_step
+                if epsilon < epsilon_end:
+                    epsilon = epsilon_end
 
 
-                    # value_action_losses_eit = [
-                    #     None if values_selected_actions_eit[a] is None else
-                    #     self.compute_value_action_losses(
-                    #         values_selected_actions=values_selected_actions_eit[a],
-                    #         expected_values_actions=expected_values_actions_eit[a])
-                    #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-                    value_action_losses_eit = self.compute_value_action_losses(
-                        values_selected_actions=values_selected_actions_eit,
-                        expected_values_actions=expected_values_actions_eit)
 
-                    scaled_value_action_loss_eit = self.reduce_value_action_losses(
-                        value_action_losses=value_action_losses_eit, axes_not_included=None,
-                        scaled=True, loss_scales_actors=None, format_scales=False)
 
-                    n_selected_actions_eit = self.compute_n_selected_actions(
-                        selected_actions=value_action_losses_eit, axes_not_included=None)
 
-                    # if reward_batch_axis is None:
-                    #     batched_rewards_eit = torch.tensor(
-                    #         data=reward_eit, device=self.device, dtype=self.dtype, requires_grad=False)
-                    # else:
-                    #     batched_rewards_eit = torch.cat(reward_eit, dim=reward_batch_axis)
-                    #
-                    # n_rewards_eit = self.compute_n_selected_actions(
-                    #     selected_actions=batched_rewards_eit, axes_not_included=None)
+                phase_name_p = phases_names[p]
+                phase_title_p = phases_titles[p]
 
-                    running_n_selected_actions_e += n_selected_actions_eit
-                    running_loss_e += (scaled_value_action_loss_eit.item() * n_selected_actions_eit)
+                self.model.eval()
 
-                    # running_n_rewards_e += n_rewards_eit
-                    # running_rewards_e += batched_rewards_eit.sum(dim=None, keepdim=False, dtype=None).item()
+                running_n_selected_actions_ep = 0
+                running_loss_ep = 0.0
+                running_n_episodes_ep = 0
+                running_sum_time_lengths_ep = 0
+                running_sum_cum_rewards_ep = 0
 
-                    s = episodes_iterator.count_observations(n_new_observations=sum([
-                        1 for a in range(0, environment[phase_name_p].n_agents, 1) if observation_eit[a] is not None]))
+                i = 0
+                while are_more_episodes_needed:
 
-                    observation_eit = copy.deepcopy(next_observation_eit)
-                    state_eit = [
-                        None if observation_eit[a] is None else copy.deepcopy(next_state_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                    observation_epit = environment[phase_name_p].reset()
 
-                    values_actions_eit = [
-                        None if state_eit[a] is None else copy.deepcopy(next_values_actions_eit[a])
-                        for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                    if self.is_recurrent:
+                        hc_epit = [
+                            None if observation_epit[a] is None else self.model.init_h(
+                                batch_shape=self.model.get_batch_shape(input_shape=observation_epit[a].shape))
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
 
-                running_n_episodes += len(time_lengths_i)
-                running_sum_time_lengths = sum(time_lengths_i, start=running_sum_time_lengths)
-                running_sum_cum_rewards = sum(cum_rewards_i, start=running_sum_cum_rewards)
+                        state_epit = [
+                            None if observation_epit[a] is None else copy.deepcopy([observation_epit[a], hc_epit[a]])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
 
-            loss_e = running_loss_e / running_n_selected_actions_e
-            time_lengths_per_episode = running_sum_time_lengths / running_n_episodes
-            cum_reward_per_episode = running_sum_cum_rewards / running_n_episodes
-            reward_per_time_point = running_sum_cum_rewards / running_sum_time_lengths
+                        values_actions_epit = [
+                            None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                        for a in range(0, environment[phase_name_p].n_agents, 1):
+                            if state_epit[a] is not None:
+                                values_actions_epit[a], hc_epit[a] = self.model(x=state_epit[a][0], h=state_epit[a][1])
+                    else:
+                        hc_epit = None
+                        state_epit = copy.deepcopy(observation_epit)
 
-            stats['lines'][e][stats['headers']['{phase:s}_Loss'.format(phase=phase_title_p)]] = loss_e
-            stats['lines'][e][stats['headers']['{phase:s}_Reward_Per_Observation'.format(
-                phase=phase_title_p)]] = reward_e
+                        values_actions_epit = [
+                            None if state_epit[a] is None else self.model(x=state_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
 
-            loss_str_e = cp_strings.format_float_to_str(loss_e, n_decimals=n_decimals_for_printing)
-            reward_str_e = cp_strings.format_float_to_str(reward_e, n_decimals=n_decimals_for_printing)
+                    cum_rewards_epi = [0.0 for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                    time_lengths_epi = [0 for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
 
-            print('Epoch: {e:d}. Training. Value Action Loss: {loss:s}. Reward per Observation {reward:s}'.format(
-                e=e, loss=loss_str_e, reward=reward_str_e))
+                    obs_iterator = cp_rl_utilities.ObservationsIterator(T=T[phase_name_p])
+
+                    for t in obs_iterator:
+
+                        action_epit = [
+                            None if values_actions_epit[a] is None
+                            else self.q_values_to_actions(values_actions=values_actions_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+
+                        delta_epit = [
+                            None if action_epit[a] is None else self.compute_deltas(action_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+
+                        next_observation_epit, reward_epit, obs_iterator.not_over = environment[phase_name_p].step(
+                            deltas=delta_epit)
+
+                        for a in range(0, environment[phase_name_p].n_agents, 1):
+                            if state_epit[a] is not None:
+                                time_lengths_epi[a] += 1
+                                if reward_batch_axis is None:
+                                    cum_rewards_epi[a] += reward_epit[a]
+                                else:
+                                    cum_rewards_epi[a] += reward_epit[a].squeeze(dim=reward_batch_axis).tolist()
+
+                        # values_selected_actions_epit = [
+                        #     None if values_actions_epit[a] is None
+                        #     else self.gather_values_selected_actions(
+                        #         values_actions=values_actions_epit[a], actions=action_epit[a])
+                        #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                        values_selected_actions_epit = torch.cat([
+                            self.gather_values_selected_actions(
+                                values_actions=values_actions_epit[a], actions=action_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)
+                            if values_actions_epit[a] is not None],
+                            dim=action_batch_axis)
+
+                        next_observation_with_zeros_epit = [
+                            None if observation_epit[a] is None
+                            else torch.zeros(
+                                size=observation_epit[a].shape, device=observation_epit[a].device,
+                                dtype=observation_epit[a].dtype, requires_grad=False)
+                            if next_observation_epit[a] is None else next_observation_epit[a]
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]
+
+                        if self.is_recurrent:
+
+                            next_state_epit = [
+                                None if next_observation_with_zeros_epit[a] is None
+                                else copy.deepcopy([next_observation_with_zeros_epit[a], hc_epit[a]])
+                                for a in range(0, environment[phase_name_p].n_agents, 1)]
+
+                            next_values_actions_epit = [
+                                None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                            for a in range(0, environment[phase_name_p].n_agents, 1):
+                                if next_state_epit[a] is not None:
+                                    next_values_actions_epit[a], hc_epit[a] = self.model(
+                                        x=next_state_epit[a][0], h=next_state_epit[a][1])
+                        else:
+                            next_state_epit = copy.deepcopy(next_observation_with_zeros_epit)
+
+                            next_values_actions_epit = [
+                                None if next_state_epit[a] is None else self.model(x=next_state_epit[a])
+                                for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+
+                        # expected_values_actions_epit = [
+                        #     None if next_values_actions_epit[a] is None else
+                        #     self.compute_expected_values_actions(
+                        #         next_values_actions=next_values_actions_epit[a], rewards=reward_epit[a])
+                        #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                        expected_values_actions_epit = torch.cat([
+                            self.compute_expected_values_actions(
+                                next_values_actions=next_values_actions_epit[a], rewards=reward_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)
+                            if next_values_actions_epit[a] is not None],
+                            dim=action_batch_axis)
+
+
+                        # value_action_losses_epit = [
+                        #     None if values_selected_actions_epit[a] is None else
+                        #     self.compute_value_action_losses(
+                        #         values_selected_actions=values_selected_actions_epit[a],
+                        #         expected_values_actions=expected_values_actions_epit[a])
+                        #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                        value_action_losses_epit = self.compute_value_action_losses(
+                            values_selected_actions=values_selected_actions_epit,
+                            expected_values_actions=expected_values_actions_epit)
+
+                        scaled_value_action_loss_epit = self.reduce_value_action_losses(
+                            value_action_losses=value_action_losses_epit, axes_not_included=None,
+                            scaled=True, loss_scales_actors=None, format_scales=False)
+
+                        n_selected_actions_epit = self.compute_n_selected_actions(
+                            selected_actions=value_action_losses_epit, axes_not_included=None)
+
+                        running_n_selected_actions_ep += n_selected_actions_epit
+                        running_loss_ep += (scaled_value_action_loss_epit.item() * n_selected_actions_epit)
+
+                        # if reward_batch_axis is None:
+                        #     batched_rewards_epit = torch.tensor(
+                        #         data=reward_epit, device=self.device, dtype=self.dtype, requires_grad=False)
+                        # else:
+                        #     batched_rewards_epit = torch.cat(reward_epit, dim=reward_batch_axis)
+                        #
+                        # n_rewards_epit = self.compute_n_selected_actions(
+                        #     selected_actions=batched_rewards_epit, axes_not_included=None)
+
+                        # running_n_rewards_ep += n_rewards_epit
+                        # running_rewards_ep += batched_rewards_epit.sum(dim=None, keepdim=False, dtype=None).item()
+
+                        observation_epit = copy.deepcopy(next_observation_epit)
+                        state_epit = [
+                            None if observation_epit[a] is None else copy.deepcopy(next_state_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+
+                        values_actions_epit = [
+                            None if state_epit[a] is None else copy.deepcopy(next_values_actions_epit[a])
+                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+
+                    n_episodes_epi = sum([1 for len_i in time_lengths_epi if len_i > 0])
+
+                    running_n_episodes_ep += n_episodes_epi
+                    running_sum_time_lengths_ep = sum(time_lengths_epi, start=running_sum_time_lengths_ep)
+                    running_sum_cum_rewards_ep = sum(cum_rewards_epi, start=running_sum_cum_rewards_ep)
+
+                    # s = episodes_iterator.count_observations(n_new_observations=sum([
+                    #     1 for a in range(0, environment[phase_name_p].n_agents, 1) if observation_epit[a] is not None]))
+                    # episodes_iterator.count_episodes(n_new_episodes=n_episodes_epi)
+                    i += n_episodes_epi
+                    are_more_episodes_needed = i < n_episodes_per_val_phase
+
+                time_length_per_episode_ep = running_sum_time_lengths_ep / running_n_episodes_ep
+                cum_reward_per_episode_ep = running_sum_cum_rewards_ep / running_n_episodes_ep
+
+                reward_per_observation_ep = running_sum_cum_rewards_ep / running_sum_time_lengths_ep
+                loss_ep = running_loss_ep / running_n_selected_actions_ep
+
+                stats['lines'][e][stats['headers']['{phase:s}_Time_Length_Per_Episode'.format(
+                    phase=phase_title_p)]] = time_length_per_episode_ep
+
+                stats['lines'][e][stats['headers']['{phase:s}_Cumulative_Reward_Per_Episode'.format(
+                    phase=phase_title_p)]] = cum_reward_per_episode_ep
+
+                stats['lines'][e][stats['headers']['{phase:s}_Reward_Per_Observation'.format(
+                    phase=phase_title_p)]] = reward_per_observation_ep
+
+                stats['lines'][e][stats['headers']['{phase:s}_Loss'.format(phase=phase_title_p)]] = loss_ep
+
+                time_length_per_episode_str_ep = cp_strings.format_float_to_str(
+                    time_length_per_episode_ep, n_decimals=n_decimals_for_printing)
+
+                cum_reward_per_episode_str_ep = cp_strings.format_float_to_str(
+                    cum_reward_per_episode_ep, n_decimals=n_decimals_for_printing)
+
+                reward_per_observation_str_ep = cp_strings.format_float_to_str(
+                    reward_per_observation_ep, n_decimals=n_decimals_for_printing)
+
+                loss_str_ep = cp_strings.format_float_to_str(loss_ep, n_decimals=n_decimals_for_printing)
+
+                print(
+                    'Epoch: {e:d}. {phase:s}. Time Length per Episode: {ep_time:s}. Cumulative Reward per Episode. '
+                    'Reward per Observation {ob_reward:s}. Loss per Observation: {ob_loss:s}.'.format(
+                        e=e, phase=phase_title_p, ep_time=time_length_per_episode_str_ep,
+                        ep_reward=cum_reward_per_episode_str_ep, ob_reward=reward_per_observation_str_ep,
+                        ob_loss=loss_str_ep))
 
 
 
@@ -883,10 +920,10 @@ class DQNMethods(OutputMethods):
 
             is_successful_epoch = False
 
-            if loss_e < lowest_loss:
+            if loss_ep < lowest_loss:
 
-                lowest_loss = loss_e
-                lowest_loss_str = cp_strings.format_float_to_str(loss_e, n_decimals=n_decimals_for_printing)
+                lowest_loss = loss_ep
+                lowest_loss_str = cp_strings.format_float_to_str(loss_ep, n_decimals=n_decimals_for_printing)
 
                 stats['lines'][e][stats['headers']['Is_Lower_Validation_Loss']] = 1
                 is_successful_epoch = True
@@ -899,8 +936,8 @@ class DQNMethods(OutputMethods):
 
             stats['lines'][e][stats['headers']['Lowest_Validation_Loss']] = lowest_loss
 
-            if reward_e > highest_reward:
-                highest_reward = reward_e
+            if reward_ep > highest_reward:
+                highest_reward = reward_ep
                 highest_reward_str = cp_strings.format_float_to_str(highest_reward, n_decimals=n_decimals_for_printing)
 
                 stats['lines'][e][stats['headers']['Is_Highest_Validation_Reward']] = 1
@@ -922,7 +959,7 @@ class DQNMethods(OutputMethods):
             cp_txt.lines_to_csv_file(stats['lines'], directory_stats, stats['headers'])
 
             print('Epoch: {e:d}. Validation. Value Action Loss: {loss:s}. Reward per Observation {reward:s}.'.format(
-                e=e, loss=loss_str_e, reward=reward_str_e))
+                e=e, loss=loss_str_ep, reward=reward_str_ep))
 
             print('Epoch {e:d} - Unsuccessful Epochs {u:d}.'.format(e=e, u=epochs.u))
 
@@ -1172,13 +1209,15 @@ class ReplayMemory:
         if self.is_recurrent:
             states = [
                 torch.cat([states[i][0] for i in range(0, self.batch_size, 1)], dim=self.state_batch_axis),
-                self.model.concatenate_hs([states[i][1] for i in range(0, self.batch_size, 1)], axis=self.state_batch_axis)]
+                self.model.concatenate_hs(
+                    [states[i][1] for i in range(0, self.batch_size, 1)], axis=self.state_batch_axis)]
             # device = states[0].device
             # dtype = states[0].dtype
 
             next_states = [
                 torch.cat([next_states[i][0] for i in range(0, self.batch_size, 1)], dim=self.state_batch_axis),
-                self.model.concatenate_hs([next_states[i][1] for i in range(0, self.batch_size, 1)], axis=self.state_batch_axis)]
+                self.model.concatenate_hs(
+                    [next_states[i][1] for i in range(0, self.batch_size, 1)], axis=self.state_batch_axis)]
             # todo: if lstm
         else:
             states = torch.cat(states, dim=self.state_batch_axis)
