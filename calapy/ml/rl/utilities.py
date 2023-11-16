@@ -72,19 +72,21 @@ class ValEpisodesIterator:
 
     def __next__(self):
 
-        self.i += 1
-
         if self.not_over:
             return self.i
         else:
             raise StopIteration
 
-    def __add__(self, n_new_observations):
+    def __add__(self, n_new_episodes):
+        self.i += n_new_episodes
+        return self.i
+
+    def count_observations(self, n_new_observations):
         self.s += n_new_observations
         return self.s
 
-    def count_observations(self, n_new_observations):
-        return self + n_new_observations
+    def count_episodes(self, n_new_episodes):
+        return self + n_new_episodes
 
     @property
     def not_over(self):
