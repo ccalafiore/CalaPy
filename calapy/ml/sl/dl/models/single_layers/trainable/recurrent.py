@@ -44,11 +44,15 @@ class _RNN(CPModelMethods):
                 self.init_h = self._init_h
                 # del self._init_hc
                 self.concatenate_hs = self._concatenate_hs
+                self.unbatch_h = self._unbatch_h
+                self.get_batch_shape_from_h = self._get_batch_shape_from_h
             elif type_name_f in self.accepted_type_names_with_hc:
                 self.type_name = type_name_f
                 self.is_with_hc = True
                 self.init_h = self._init_hc
                 self.concatenate_hs = self._concatenate_hcs
+                self.unbatch_h = self._unbatch_hc
+                self.get_batch_shape_from_h = self._get_batch_shape_from_hc
             else:
                 raise ValueError('type_name')
         else:
@@ -91,7 +95,7 @@ class _RNN(CPModelMethods):
                 axis_features_input -= 1
 
             if h is None:
-                batch_shape = self.get_batch_shape(input_shape=input.shape)
+                batch_shape = self.get_batch_shape_from_input_shape(input_shape=input.shape)
                 h = self.init_h(batch_shape=batch_shape)
 
             # outputs_shape = [input.shape[a] for a in range(0, input.ndim, 1)]
@@ -130,7 +134,7 @@ class _RNN(CPModelMethods):
             raise ValueError('input.ndim')
         else:
             if h is None:
-                batch_shape = self.get_batch_shape(input_shape=input.shape)
+                batch_shape = self.get_batch_shape_from_input_shape(input_shape=input.shape)
                 h = self.init_h(batch_shape=batch_shape)
 
             if self.min_input_n_dims <= input.ndim <= self._torch_max_input_n_dims:
@@ -239,7 +243,7 @@ class _RNN(CPModelMethods):
 
         return h
 
-    def get_batch_shape(self, input_shape):
+    def get_batch_shape_from_input_shape(self, input_shape):
 
         """
 
@@ -302,8 +306,101 @@ class _RNN(CPModelMethods):
 
     def _concatenate_hcs(self, hs, axis=0):
 
-        return [torch.cat(hs[0], dim=axis), torch.cat(hs[1], dim=axis)]
+        n_hs = len(hs)
+        return [
+            torch.cat([hs[i][0] for i in range(0, n_hs, 1)], dim=axis),
+            torch.cat([hs[i][1] for i in range(0, n_hs, 1)], dim=axis)]
 
+    def _unbatch_h(self, h, axes=0, keepdims=True):
+
+        """
+
+
+        :type h: torch.Tensor
+        :type axes: list | tuple | int
+        :type keepdims: bool
+
+        """
+
+        if isinstance(axes, int):
+            axes = [axes]
+        elif isinstance(axes, (list, tuple)):
+            pass
+        else:
+            raise TypeError('axes')
+
+        batch_shape = self._get_batch_shape_from_h(h=h, axes=axes)
+
+        indexes = np.asarray([slice(0, h.shape[a], 1) for a in range(0, h.ndim, 1)], dtype='O')
+
+        hs = np.empty(shape=batch_shape, dtype='O')
+        for comps_i in cp_combinations.n_conditions_to_combinations_on_the_fly(n_conditions=batch_shape, dtype='i'):
+
+            if keepdims:
+                ind_i = [slice(comp_i, comp_i + 1, 1) for comp_i in comps_i.tolist()]
+            else:
+                ind_i = comps_i.tolist()
+
+            indexes[axes] = ind_i
+
+            hs[tuple(comps_i)] = h[tuple(indexes)]
+
+        return hs.tolist()
+
+    def _unbatch_hc(self, h, axes=0, keepdims=True):
+
+        """
+
+
+        :type h: list[torch.Tensor, torch.Tensor]
+        :type axes: list | tuple | int
+        :type keepdims: bool
+
+        """
+
+        Z = 2
+
+        if isinstance(axes, int):
+            axes = [axes]
+        elif isinstance(axes, (list, tuple)):
+            pass
+        else:
+            raise TypeError('axes')
+
+        batch_shape = self._get_batch_shape_from_hc(h=h, axes=axes)
+
+        hs = np.empty(shape=batch_shape + [Z], dtype='O')
+        indexes_hs = [slice(0, hs.shape[a], 1) for a in range(0, hs.ndim, 1)]  # type: list
+
+        for z in range(0, Z, 1):
+            indexes_hs[hs.ndim - 1] = z
+            hs[tuple(indexes_hs)] = self._unbatch_h(h[z], axes=axes, keepdims=keepdims)
+
+        return hs.tolist()
+
+    def _get_batch_shape_from_h(self, h, axes):
+
+        if isinstance(axes, int):
+            axes = [axes]
+        elif isinstance(axes, (list, tuple)):
+            pass
+        else:
+            raise TypeError('axes')
+
+        batch_shape = [h.shape[a] for a in axes]
+        return batch_shape
+
+    def _get_batch_shape_from_hc(self, h, axes):
+
+        if isinstance(axes, int):
+            axes = [axes]
+        elif isinstance(axes, (list, tuple)):
+            pass
+        else:
+            raise TypeError('axes')
+
+        batch_shape = [h[0].shape[a] for a in axes]
+        return batch_shape
 
 
 

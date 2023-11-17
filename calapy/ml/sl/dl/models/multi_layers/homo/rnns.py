@@ -169,7 +169,7 @@ class RNN(_NN):
         # return h
         return [self.layers[l].init_h(batch_shape=batch_shape, generator=generators[l]) for l in range(0, self.L, 1)]
 
-    def get_batch_shape(self, input_shape):
+    def get_batch_shape_from_input_shape(self, input_shape):
 
         """
 
@@ -179,7 +179,7 @@ class RNN(_NN):
         :rtype: list[int]
         """
 
-        return self.layers[0].get_batch_shape(input_shape=input_shape)
+        return self.layers[0].get_batch_shape_from_input_shape(input_shape=input_shape)
 
     def set_axis_time(self, axis_time):
 
@@ -203,6 +203,32 @@ class RNN(_NN):
         #     self.layers[l].concatenate_hs([hs[i][l] for i in range(0, n_hs, 1)], axis=axis)
 
         return [self.layers[l].concatenate_hs([hs[i][l] for i in range(0, n_hs, 1)], axis=axis) for l in range(0, self.L, 1)]
+
+    def unbatch_h(self, h, axes=0, keepdims=True):
+
+        """
+
+
+        :type h: list[torch.Tensor] | list[list[torch.Tensor, torch.Tensor]]
+        :type axes: list | tuple | int
+        :type keepdims: bool
+
+        """
+
+        batch_shape = self.get_batch_shape_from_hc(h=h, axes=axes)
+
+        hs = np.empty(shape=batch_shape + [self.L], dtype='O')
+        indexes_hs = [slice(0, hs.shape[a], 1) for a in range(0, hs.ndim, 1)]  # type: list
+
+        for l in range(0, self.L, 1):
+
+            indexes_hs[hs.ndim - 1] = l
+            hs[tuple(indexes_hs)] = self.layers[l].unbatch_h(h[l], axes=axes, keepdims=keepdims)
+
+        return hs.tolist()
+
+    def get_batch_shape_from_h(self, h, axes):
+        return self.layers[0].get_batch_shape_from_h(h=h, axes=axes)
 
 
 class IndRNNs(_IndNNs):
@@ -355,7 +381,7 @@ class IndRNNs(_IndNNs):
         # return h
         return [self.models[m].init_h(batch_shape=batch_shape, generators=generators[m]) for m in range(0, self.M, 1)]
 
-    def get_batch_shape(self, input_shape):
+    def get_batch_shape_from_input_shape(self, input_shape):
 
         """
 
@@ -365,7 +391,7 @@ class IndRNNs(_IndNNs):
         :rtype: list[int]
         """
 
-        return self.models[0].get_batch_shape(input_shape=input_shape)
+        return self.models[0].get_batch_shape_from_input_shape(input_shape=input_shape)
 
     def set_axis_time(self, axis_time):
 
@@ -386,6 +412,31 @@ class IndRNNs(_IndNNs):
 
         n_hs = len(hs)
         return [self.models[m].concatenate_hs([hs[i][m] for i in range(0, n_hs, 1)], axis=axis) for m in range(0, self.M, 1)]
+
+    def unbatch_h(self, h, axes=0, keepdims=True):
+
+        """
+
+
+        :type h: list[list[torch.Tensor]] | list[list[list[torch.Tensor, torch.Tensor]]]
+        :type axes: list | tuple | int
+        :type keepdims: bool
+
+        """
+
+        batch_shape = self.get_batch_shape_from_hc(h=h, axes=axes)
+
+        hs = np.empty(shape=batch_shape + [self.M], dtype='O')
+        indexes_hs = [slice(0, hs.shape[a], 1) for a in range(0, hs.ndim, 1)]  # type: list
+
+        for m in range(0, self.M, 1):
+            indexes_hs[hs.ndim - 1] = m
+            hs[tuple(indexes_hs)] = self.models[m].unbatch_h(h[m], axes=axes, keepdims=keepdims)
+
+        return hs.tolist()
+
+    def get_batch_shape_from_h(self, h, axes):
+        return self.models[0].get_batch_shape_from_h(h=h, axes=axes)
 
 
 class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
@@ -547,7 +598,7 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         return [self.shared_layers.init_h(batch_shape=batch_shape, generators=generators[0]),
                 self.private_layers.init_h(batch_shape=batch_shape, generators=generators[1])]
 
-    def get_batch_shape(self, input_shape):
+    def get_batch_shape_from_input_shape(self, input_shape):
 
         """
 
@@ -557,7 +608,7 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         :rtype: list[int]
         """
 
-        return self.shared_layers.get_batch_shape(input_shape=input_shape)
+        return self.shared_layers.get_batch_shape_from_input_shape(input_shape=input_shape)
 
     def set_axis_time(self, axis_time):
 
@@ -579,6 +630,34 @@ class RNNsWithSharedLayersAndPrivateLayers(cp_ModelMethods):
         return [
             self.shared_layers.concatenate_hs([hs[i][0] for i in range(0, n_hs, 1)], axis=axis),
             self.private_layers.concatenate_hs([hs[i][1] for i in range(0, n_hs, 1)], axis=axis)]
+
+    def unbatch_h(self, h, axes=0, keepdims=True):
+
+        """
+
+
+        :type h: list[list[torch.Tensor], list[list[torch.Tensor]]] | list[list[list[torch.Tensor, torch.Tensor]], list[list[list[torch.Tensor, torch.Tensor]]]]
+        :type axes: list | tuple | int
+        :type keepdims: bool
+
+        """
+        n = 2
+        batch_shape = self.get_batch_shape_from_hc(h=h, axes=axes)
+
+        hs = np.empty(shape=batch_shape + [n], dtype='O')
+        indexes_hs = [slice(0, hs.shape[a], 1) for a in range(0, hs.ndim, 1)]  # type: list
+
+        i = 0
+        indexes_hs[hs.ndim - 1] = i
+        hs[tuple(indexes_hs)] = self.shared_layers.unbatch_h(h[i], axes=axes, keepdims=keepdims)
+        i += 1
+        indexes_hs[hs.ndim - 1] = i
+        hs[tuple(indexes_hs)] = self.shared_layers.unbatch_h(h[i], axes=axes, keepdims=keepdims)
+
+        return hs.tolist()
+
+    def get_batch_shape_from_h(self, h, axes):
+        return self.shared_layers[0].get_batch_shape_from_h(h=h, axes=axes)
 
 
 class SharedRNNAndIndRNNsAndIndFCNNs(RNNsWithSharedLayersAndPrivateLayers):
