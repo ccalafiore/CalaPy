@@ -236,7 +236,7 @@ class SequentialHeteroLayers(cp_ModelMethods):
 
         return h
 
-    def get_batch_shape(self, input_shape, batch_axes):
+    def get_batch_shape_from_input_shape(self, input_shape, batch_axes):
 
         """
 

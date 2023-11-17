@@ -95,7 +95,7 @@ class _RNN(CPModelMethods):
                 axis_features_input -= 1
 
             if h is None:
-                batch_shape = self.get_batch_shape(input_shape=input.shape)
+                batch_shape = self.get_batch_shape_from_input_shape(input_shape=input.shape)
                 h = self.init_h(batch_shape=batch_shape)
 
             # outputs_shape = [input.shape[a] for a in range(0, input.ndim, 1)]
@@ -134,7 +134,7 @@ class _RNN(CPModelMethods):
             raise ValueError('input.ndim')
         else:
             if h is None:
-                batch_shape = self.get_batch_shape(input_shape=input.shape)
+                batch_shape = self.get_batch_shape_from_input_shape(input_shape=input.shape)
                 h = self.init_h(batch_shape=batch_shape)
 
             if self.min_input_n_dims <= input.ndim <= self._torch_max_input_n_dims:
@@ -306,7 +306,10 @@ class _RNN(CPModelMethods):
 
     def _concatenate_hcs(self, hs, axis=0):
 
-        return [torch.cat(hs[0], dim=axis), torch.cat(hs[1], dim=axis)]
+        n_hs = len(hs)
+        return [
+            torch.cat([hs[i][0] for i in range(0, n_hs, 1)], dim=axis),
+            torch.cat([hs[i][1] for i in range(0, n_hs, 1)], dim=axis)]
 
     def _unbatch_h(self, h, axes=0, keepdims=True):
 
