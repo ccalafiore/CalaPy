@@ -188,7 +188,7 @@ class DQNMethods(OutputMethods):
         """
 
         :type values_actions: list | torch.Tensor
-        :type epsilon: float
+        :type epsilon: list[float]
         """
 
         # todo: forward only n non-random actions
@@ -212,28 +212,36 @@ class DQNMethods(OutputMethods):
 
         if self.action_selection_type == 'active':
 
-            mask_randoms = torch.rand(
-                shape_actions_a, out=None, dtype=None, layout=torch.strided,
-                device=device, requires_grad=False) < epsilon
-
-            n_randoms = mask_randoms.sum(dtype=None).item()
-
-            mask_greedy = torch.logical_not(mask_randoms, out=None)
+            # mask_randoms = torch.rand(
+            #     shape_actions_a, out=None, dtype=None, layout=torch.strided,
+            #     device=device, requires_grad=False) < epsilon
+            #
+            # n_randoms = mask_randoms.sum(dtype=None).item()
+            #
+            # mask_greedy = torch.logical_not(mask_randoms, out=None)
 
             for a in range(0, A, 1):
 
                 indexes_actions[self.axis_models_losses] = a
                 tuple_indexes_actions = tuple(indexes_actions)
 
+                mask_randoms_a = torch.rand(
+                    shape_actions_a, out=None, dtype=None, layout=torch.strided,
+                    device=device, requires_grad=False) < epsilon[a]  # type: torch.Tensor
+
+                n_randoms_a = mask_randoms_a.sum(dtype=None).item()
+
+                mask_greedy_a = torch.logical_not(mask_randoms_a, out=None)
+
                 random_action_a = torch.randint(
-                    low=0, high=self.n_possible_actions[a], size=(n_randoms,),
+                    low=0, high=self.n_possible_actions[a], size=(n_randoms_a,),
                     generator=None, dtype=torch.int64, device=device, requires_grad=False)
 
-                actions[tuple_indexes_actions][mask_randoms] = random_action_a
+                actions[tuple_indexes_actions][mask_randoms_a] = random_action_a
 
-                actions[tuple_indexes_actions][mask_greedy] = (
-                    # values_actions[a].max(dim=self.axis_features_outs, keepdim=True)[1][mask_greedy])
-                    values_actions[a].max(dim=self.axis_features_outs, keepdim=False)[1][mask_greedy])
+                actions[tuple_indexes_actions][mask_greedy_a] = (
+                    # values_actions[a].max(dim=self.axis_features_outs, keepdim=True)[1][mask_greedy_a])
+                    values_actions[a].max(dim=self.axis_features_outs, keepdim=False)[1][mask_greedy_a])
 
         elif self.action_selection_type == 'random':
 
@@ -402,6 +410,30 @@ class DQNMethods(OutputMethods):
             min_n_episodes_for_optim=2, min_n_samples_for_optim=1000,
             n_episodes_per_val_phase=1000, T_val=None, directory_outputs=None):
 
+        """
+
+        :type environment:
+        :type optimizer:
+        :type replay_memory_add_as:
+        :type state_batch_axis:
+        :type action_batch_axis:
+        :type reward_batch_axis:
+        :type U:
+        :type E:
+        :type n_batches_per_train_phase:
+        :type batch_size_of_train:
+        :type T_train:
+        :type epsilon_start: np.ndarray[float]
+        :type epsilon_end: np.ndarray[float]
+        :type epsilon_step: np.ndarray[float]
+        :type capacity: int
+        :type min_n_episodes_for_optim:
+        :type min_n_samples_for_optim:
+        :type n_episodes_per_val_phase:
+        :type T_val:
+        :type directory_outputs:
+        """
+
         cp_timer = cp_clock.Timer()
 
         phases_names = ('training', 'validation')
@@ -458,7 +490,7 @@ class DQNMethods(OutputMethods):
         torch.set_grad_enabled(False)
 
         headers = [
-            'Epoch', 'Unsuccessful_Epochs',
+            'Epoch', 'Unsuccessful_Epochs', 'Epsilons',
             # 'Start_Date', 'Start_Time' 'Epoch_Duration', 'Elapsed_Time',
 
             'Training_Time_Length_Per_Episode', 'Training_Cumulative_Reward_Per_Episode',
@@ -522,8 +554,9 @@ class DQNMethods(OutputMethods):
         lowest_loss_str = str(lowest_loss)
 
         epsilon = epsilon_start  # todo to the model
-        if epsilon < epsilon_end:
-            epsilon = epsilon_end
+        ind_bool = epsilon < epsilon_end
+        if np.any(ind_bool):
+            epsilon[ind_bool] = copy.deepcopy(epsilon_end[ind_bool])
 
         epochs = cp_ml_utilities.EpochsIterator(U=U, E=E)
         e = 0
@@ -535,6 +568,7 @@ class DQNMethods(OutputMethods):
 
             stats['lines'].append(new_line_stats.copy())
             stats['lines'][e][stats['headers']['Epoch']] = e
+            stats['lines'][e][stats['headers']['Epsilons']] = epsilon.tolist()
 
             # Each Training Epoch has a training and a validation phase
             for p in range(0, n_phases, 1):
@@ -827,8 +861,9 @@ class DQNMethods(OutputMethods):
 
                 if phase_name_p == 'training':
                     epsilon = epsilon + epsilon_step
-                    if epsilon < epsilon_end:
-                        epsilon = epsilon_end
+                    ind_bool = epsilon < epsilon_end
+                    if np.any(ind_bool):
+                        epsilon[ind_bool] = copy.deepcopy(epsilon_end[ind_bool])
                 elif phase_name_p == 'validation':
                     model_dict = copy.deepcopy(self.model.state_dict())
                     if os.path.isfile(directory_model_at_last_epoch):
