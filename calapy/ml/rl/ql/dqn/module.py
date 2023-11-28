@@ -493,10 +493,13 @@ class DQNMethods(OutputMethods):
             'Epoch', 'Unsuccessful_Epochs', 'Epsilons',
             # 'Start_Date', 'Start_Time' 'Epoch_Duration', 'Elapsed_Time',
 
-            'Training_Time_Length_Per_Episode', 'Training_Cumulative_Reward_Per_Episode',
-            'Training_Reward_Per_Observation', 'Training_Loss',
+            'Training_Time_Length_Per_Episode', 'Training_Scores_Per_Episode',
+            'Training_Cumulative_Reward_Per_Episode', 'Training_Reward_Per_Observation', 'Training_Loss',
 
             'Validation_Time_Length_Per_Episode',
+
+            'Validation_Scores_Per_Episode',
+            'Highest_Validation_Scores_Per_Episode', 'Is_Highest_Validation_Scores_Per_Episode',
 
             'Validation_Cumulative_Reward_Per_Episode',
             'Highest_Validation_Cumulative_Reward_Per_Episode', 'Is_Highest_Validation_Cumulative_Reward_Per_Episode',
@@ -521,6 +524,9 @@ class DQNMethods(OutputMethods):
 
         directory_model_at_last_epoch = os.path.join(directory_outputs, 'model_at_last_epoch.pth')
 
+        directory_model_with_highest_score_per_episode = os.path.join(
+            directory_outputs, 'model_with_highest_score_per_episode.pth')
+
         directory_model_with_highest_cum_reward_per_episode = os.path.join(
             directory_outputs, 'model_with_highest_cumulative_reward_per_episode.pth')
 
@@ -540,6 +546,10 @@ class DQNMethods(OutputMethods):
             capacity=capacity, batch_size=batch_size_of_train, add_as=replay_memory_add_as,
             state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis,
             is_recurrent=self.is_recurrent, model=self.model)
+
+        score_per_episode_ep = -math.inf
+        highest_score_per_episode = score_per_episode_ep
+        highest_score_per_episode_str = str(highest_score_per_episode)
 
         cum_reward_per_episode_ep = -math.inf
         highest_cum_reward_per_episode = cum_reward_per_episode_ep
@@ -580,6 +590,7 @@ class DQNMethods(OutputMethods):
                 running_loss_ep = 0.0
                 running_n_episodes_ep = 0
                 running_sum_time_lengths_ep = 0
+                running_sum_scores_ep = 0
                 running_sum_cum_rewards_ep = 0
 
                 i = 0
@@ -760,6 +771,8 @@ class DQNMethods(OutputMethods):
 
                     running_n_episodes_ep += n_episodes_epi
                     running_sum_time_lengths_ep = sum(time_lengths_epi, start=running_sum_time_lengths_ep)
+
+                    running_sum_scores_ep = sum(environment[phase_name_p].get_scores())
                     running_sum_cum_rewards_ep = sum(cum_rewards_epi, start=running_sum_cum_rewards_ep)
 
                     was_not_optimised = True
@@ -843,6 +856,7 @@ class DQNMethods(OutputMethods):
                         raise ValueError('phase_name_p')
 
                 time_length_per_episode_ep = running_sum_time_lengths_ep / running_n_episodes_ep
+                score_per_episode_ep = running_sum_scores_ep / running_n_episodes_ep
                 cum_reward_per_episode_ep = running_sum_cum_rewards_ep / running_n_episodes_ep
 
                 reward_per_observation_ep = running_sum_cum_rewards_ep / running_sum_time_lengths_ep
@@ -850,6 +864,9 @@ class DQNMethods(OutputMethods):
 
                 stats['lines'][e][stats['headers']['{phase:s}_Time_Length_Per_Episode'.format(
                     phase=phase_title_p)]] = time_length_per_episode_ep
+
+                stats['lines'][e][stats['headers']['{phase:s}_Scores_Per_Episode'.format(
+                    phase=phase_title_p)]] = score_per_episode_ep
 
                 stats['lines'][e][stats['headers']['{phase:s}_Cumulative_Reward_Per_Episode'.format(
                     phase=phase_title_p)]] = cum_reward_per_episode_ep
@@ -873,6 +890,23 @@ class DQNMethods(OutputMethods):
                     torch.save(model_dict, directory_model_at_last_epoch)
 
                     is_successful_epoch = False
+
+                    if score_per_episode_ep >= highest_score_per_episode:
+                        highest_score_per_episode = score_per_episode_ep
+                        highest_score_per_episode_str = cp_strings.format_float_to_str(
+                            highest_score_per_episode, n_decimals=n_decimals_for_printing)
+
+                        stats['lines'][e][stats['headers']['Is_Highest_Validation_Scores_Per_Episode']] = 1
+                        is_successful_epoch = True
+
+                        if os.path.isfile(directory_model_with_highest_score_per_episode):
+                            os.remove(directory_model_with_highest_score_per_episode)
+                        torch.save(model_dict, directory_model_with_highest_score_per_episode)
+                    else:
+                        stats['lines'][e][stats['headers']['Is_Highest_Validation_Scores_Per_Episode']] = 0
+
+                    stats['lines'][e][stats['headers'][
+                        'Highest_Validation_Scores_Per_Episode']] = highest_score_per_episode
 
                     if cum_reward_per_episode_ep >= highest_cum_reward_per_episode:
                         highest_cum_reward_per_episode = cum_reward_per_episode_ep
@@ -937,6 +971,9 @@ class DQNMethods(OutputMethods):
                 time_length_per_episode_str_ep = cp_strings.format_float_to_str(
                     time_length_per_episode_ep, n_decimals=n_decimals_for_printing)
 
+                score_per_episode_str_ep = cp_strings.format_float_to_str(
+                    score_per_episode_ep, n_decimals=n_decimals_for_printing)
+
                 cum_reward_per_episode_str_ep = cp_strings.format_float_to_str(
                     cum_reward_per_episode_ep, n_decimals=n_decimals_for_printing)
 
@@ -947,11 +984,11 @@ class DQNMethods(OutputMethods):
 
                 print(
                     'Epoch: {e:d}. Phase: {phase:s}. Time Length per Episode: {ep_time:s}. '
-                    'Cumulative Reward per Episode {ep_reward:s}. Reward per Observation {ob_reward:s}. '
-                    'Loss per Observation: {ob_loss:s}.'.format(
+                    'Score per Episode {ep_score:s}. Cumulative Reward per Episode {ep_reward:s}. '
+                    'Reward per Observation {ob_reward:s}. Loss per Observation: {ob_loss:s}.'.format(
                         e=e, phase=phase_title_p, ep_time=time_length_per_episode_str_ep,
-                        ep_reward=cum_reward_per_episode_str_ep, ob_reward=reward_per_observation_str_ep,
-                        ob_loss=loss_str_ep))
+                        ep_score=score_per_episode_str_ep, ep_reward=cum_reward_per_episode_str_ep,
+                        ob_reward=reward_per_observation_str_ep, ob_loss=loss_str_ep))
 
             print('Epoch {e:d} - Unsuccessful Epochs {u:d}.'.format(e=e, u=epochs.u))
 
@@ -968,6 +1005,7 @@ class DQNMethods(OutputMethods):
             m=time_training.minutes, s=time_training.seconds))
         print('Number of Epochs: {E:d}'.format(E=E))
 
+        print('Highest Score per Episode: {:s}'.format(highest_score_per_episode_str))
         print('Highest Cumulative Reward per Episode: {:s}'.format(highest_cum_reward_per_episode_str))
         print('Highest Reward per Observation: {:s}'.format(highest_reward_per_obs_str))
         print('Lowest Loss: {:s}'.format(lowest_loss_str))
