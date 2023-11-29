@@ -772,7 +772,7 @@ class DQNMethods(OutputMethods):
                     running_n_episodes_ep += n_episodes_epi
                     running_sum_time_lengths_ep = sum(time_lengths_epi, start=running_sum_time_lengths_ep)
 
-                    running_sum_scores_ep = sum(environment[phase_name_p].get_scores())
+                    running_sum_scores_ep = sum(environment[phase_name_p].get_scores(), start=running_sum_scores_ep)
                     running_sum_cum_rewards_ep = sum(cum_rewards_epi, start=running_sum_cum_rewards_ep)
 
                     was_not_optimised = True
