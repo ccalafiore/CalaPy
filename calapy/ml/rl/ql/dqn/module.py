@@ -876,7 +876,7 @@ class DQNMethods(OutputMethods):
 
                 stats['lines'][e][stats['headers']['{phase:s}_Loss'.format(phase=phase_title_p)]] = loss_ep
 
-                environment[phase_name_p].difficulty_step()
+                environment[phase_name_p].step_difficulty()
 
                 if phase_name_p == 'training':
                     epsilon = epsilon + epsilon_step
