@@ -403,7 +403,7 @@ class DQNMethods(OutputMethods):
 
     def train_from_ind_agents(
             self, environment, optimizer,
-            state_batch_axis, action_batch_axis, reward_batch_axis,
+            replay_memory_add_as, state_batch_axis, action_batch_axis, reward_batch_axis,
             U=10, E=None,
             n_batches_per_train_phase=100, batch_size_of_train=100, T_train=None,
             epsilon_start=.95, epsilon_end=.01, epsilon_step=-.05,  capacity=100000,
@@ -414,6 +414,7 @@ class DQNMethods(OutputMethods):
 
         :type environment:
         :type optimizer:
+        :type replay_memory_add_as:
         :type state_batch_axis:
         :type action_batch_axis:
         :type reward_batch_axis:
@@ -542,8 +543,9 @@ class DQNMethods(OutputMethods):
         print(dashes)
 
         replay_memory = ReplayMemory(
-            capacity=capacity, add_as='s', batch_size=batch_size_of_train,
-            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
+            capacity=capacity, batch_size=batch_size_of_train, add_as=replay_memory_add_as,
+            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis,
+            is_recurrent=self.is_recurrent, model=self.model)
 
         score_per_episode_ep = -math.inf
         highest_score_per_episode = score_per_episode_ep
@@ -1011,28 +1013,28 @@ class DQNMethods(OutputMethods):
         return self.model
 
 
-class MultiObservationMemory:
+class ReplayMemory:
     """A simple replay buffer."""
 
     def __init__(
-            self, capacity, add_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
+            self, capacity, batch_size, add_as,
+            state_batch_axis, action_batch_axis, reward_batch_axis,
+            is_recurrent=False, model=None):
 
         """
 
 
         :type capacity: int
-
+        :type batch_size: int
         :param add_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
                        some batched observations
-        :type add_as: str
-
-        :type batch_size: int
-
         :type state_batch_axis: int
-
         :type action_batch_axis: int
-
         :type reward_batch_axis: int | None
+
+        :type add_as: str
+        :type is_recurrent: bool
+        :type model: model | None
         """
 
         self.states = []
@@ -1078,6 +1080,21 @@ class MultiObservationMemory:
         else:
             raise TypeError('add_as')
 
+        if is_recurrent is None:
+            self.is_recurrent = False
+        elif isinstance(is_recurrent, bool):
+            self.is_recurrent = is_recurrent
+        else:
+            raise TypeError('is_recurrent')
+
+        if self.is_recurrent:
+            if model is None:
+                raise ValueError('model')
+            else:
+                self.model = model
+        else:
+            self.model = None
+
         self.current_len = 0
 
     def add(self, states, actions, rewards, next_states):
@@ -1093,7 +1110,7 @@ class MultiObservationMemory:
 
         self.next_states.append(next_states)
 
-        self.current_len = len(self)
+        self.current_len = len(self.states)
         self.remove_extras()
 
         return None
@@ -1108,7 +1125,7 @@ class MultiObservationMemory:
 
         self.next_states += next_states
 
-        self.current_len = len(self)
+        self.current_len = len(self.states)
         self.remove_extras()
 
         return None
@@ -1122,15 +1139,38 @@ class MultiObservationMemory:
         return None
 
     def unbatch_states(self, states):
-        return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
+
+        if self.is_recurrent:
+            n_new_states = states[0].shape[self.state_batch_axis]
+            idx = [slice(0, states[0].shape[a], 1) for a in range(0, states[0].ndim, 1)]
+
+            new_states = np.empty(shape=[n_new_states, 2], dtype='O')
+            # new_idx = [slice(0, new_states.shape[a], 1) for a in range(0, new_states.ndim, 1)]
+
+            j = 0
+            new_idx = [0, j]
+            for i in range(0, n_new_states, 1):
+
+                idx[self.state_batch_axis] = slice(i, i + 1, 1)
+
+                new_idx[0] = i
+
+                new_states[tuple(new_idx)] = states[j][tuple(idx)]
+
+            j = 1
+            new_idx = [slice(0, n_new_states, 1), j]
+            new_states[tuple(new_idx)] = self.model.unbatch_h(h=states[j], axes=self.state_batch_axis, keepdims=True)
+
+            return new_states
+        else:
+            return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
 
     def unbatch_actions(self, actions):
         return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
 
     def unbatch_rewards(self, rewards):
         if self.reward_batch_axis is None:
-            # return rewards
-            raise ValueError('reward_batch_axis')
+            return rewards
         else:
             return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
 
@@ -1157,15 +1197,15 @@ class MultiObservationMemory:
 
             self.next_states = self.next_states[slice(n_extras, self.current_len, 1)]
 
-            self.current_len = len(self)
+            self.current_len = len(self.states)
 
         return None
 
     def clear(self):
         self.__init__(
-            capacity=self.capacity, add_as=self.add_as,
-            batch_size=self.batch_size, state_batch_axis=self.state_batch_axis,
-            action_batch_axis=self.action_batch_axis, reward_batch_axis=self.reward_batch_axis)
+            capacity=self.capacity, batch_size=self.batch_size, state_batch_axis=self.state_batch_axis,
+            action_batch_axis=self.action_batch_axis, reward_batch_axis=self.reward_batch_axis,
+            add_as=self.add_as, is_recurrent=self.is_recurrent, model=self.model)
         return None
 
     def sample(self):
@@ -1186,20 +1226,40 @@ class MultiObservationMemory:
             rewards.append(self.rewards.pop(index))
             next_states.append(self.next_states.pop(index))
 
-            if next_states[i] is None:
-                next_states[i] = torch.zeros(
-                    size=states[i].shape, device=states[i].device, dtype=states[i].dtype, requires_grad=False)
+            if self.is_recurrent:
+                if next_states[i][0] is None:
+                    next_states[i][0] = torch.zeros(
+                        size=states[i][0].shape, device=states[i][0].device,
+                        dtype=states[i][0].dtype, requires_grad=False)
+            else:
+                if next_states[i] is None:
+                    next_states[i] = torch.zeros(
+                        size=states[i].shape, device=states[i].device, dtype=states[i].dtype, requires_grad=False)
 
-            self.current_len = len(self)
+            self.current_len = len(self.states)
 
+        if self.is_recurrent:
+            states = [
+                torch.cat([states[i][0] for i in range(0, self.batch_size, 1)], dim=self.state_batch_axis),
+                self.model.concatenate_hs(
+                    [states[i][1] for i in range(0, self.batch_size, 1)], axis=self.state_batch_axis)]
+            device = states[0].device
+            dtype = states[0].dtype
 
-        states = torch.cat(states, dim=self.state_batch_axis)
-        next_states = torch.cat(next_states, dim=self.state_batch_axis)
+            next_states = [
+                torch.cat([next_states[i][0] for i in range(0, self.batch_size, 1)], dim=self.state_batch_axis),
+                self.model.concatenate_hs(
+                    [next_states[i][1] for i in range(0, self.batch_size, 1)], axis=self.state_batch_axis)]
+            # todo: if lstm
+        else:
+            states = torch.cat(states, dim=self.state_batch_axis)
+            next_states = torch.cat(next_states, dim=self.state_batch_axis)
+            device = states.device
+            dtype = states.dtype
+
         actions = torch.cat(actions, dim=self.action_batch_axis)
 
         if self.reward_batch_axis is None:
-            device = states.device
-            dtype = states.dtype
             rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
         else:
             rewards = torch.cat(rewards, dim=self.reward_batch_axis)
@@ -1208,93 +1268,6 @@ class MultiObservationMemory:
 
     def __len__(self) -> int:
         return len(self.states)
-
-
-class SingleEpisodeMemory(MultiObservationMemory):
-    """A simple replay buffer for recurrent models."""
-
-    def __init__(
-            self, capacity, add_as, state_time_axis, action_time_axis, reward_time_axis):
-        """
-
-
-        :type capacity: int
-
-        :param add_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
-                       some batched observations
-        :type add_as: str
-
-        :type state_time_axis: int
-
-        :type action_time_axis: int
-
-        :type reward_time_axis: int | None
-        """
-
-        MultiObservationMemory.__init__(
-            self=self, capacity=capacity, add_as=add_as, batch_size=0,
-            state_batch_axis=state_time_axis, action_batch_axis=action_time_axis,
-            reward_batch_axis=reward_time_axis)
-
-        self.state_time_axis = self.state_batch_axis
-        self.action_time_axis = self.action_batch_axis
-        self.reward_time_axis = self.reward_batch_axis
-
-        delattr(self, 'batch_size')
-        delattr(self, 'state_batch_axis')
-        delattr(self, 'action_batch_axis')
-        delattr(self, 'reward_batch_axis')
-
-        print()
-
-    def get_tot_observations(self):
-        return len(self)
-
-    def clear(self):
-        print()
-
-    def sample(self):
-        print()
-
-
-class MultiEpisodeMemory(MultiObservationMemory):
-    """A simple replay buffer for recurrent models."""
-
-    def __init__(
-            self, capacity, add_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
-        """
-
-
-        :type capacity: int
-
-        :param add_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
-                       some batched observations
-        :type add_as: str
-
-        :type batch_size: int
-
-        :type state_batch_axis: int
-
-        :type action_batch_axis: int
-
-        :type reward_batch_axis: int | None
-        """
-
-        MultiObservationMemory.__init__(
-            self=self, capacity=capacity, add_as=add_as, batch_size=batch_size,
-            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis,
-            reward_batch_axis=reward_batch_axis)
-
-    def get_tot_episodes(self):
-        return len(self)
-
-    def get_tot_observations(self):
-        return sum([len(self.states[i]) for i in range(0, self.get_tot_episodes(), 1)])
-
-    def clear(self):
-        print()
-    def sample(self):
-        print()
 
 
 class TimedDQNMethods(DQNMethods, TimedOutputMethods):
