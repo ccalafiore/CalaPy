@@ -1092,6 +1092,40 @@ class _Memory:
     def add(self, states, actions, rewards, next_states):
         return None
 
+    def add_list(self, states, actions, rewards, next_states):
+        return None
+
+    def add_batch(self, states, actions, rewards, next_states):
+
+        self.add_list(
+            states=self.unbatch_states(states=states), actions=self.unbatch_actions(actions=actions),
+            rewards=self.unbatch_rewards(rewards=rewards), next_states=self.unbatch_states(states=next_states))
+
+        return None
+
+    def unbatch_states(self, states):
+        return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
+
+    def unbatch_actions(self, actions):
+        return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
+
+    def unbatch_rewards(self, rewards):
+        if self.reward_batch_axis is None:
+            # return rewards
+            raise ValueError('reward_batch_axis')
+        else:
+            return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
+
+    def _unbatch(self, samples, batch_axis):
+
+        n_new_samples = samples.shape[batch_axis]
+        new_samples = [None for i in range(0, n_new_samples, 1)]
+        idx = [slice(0, samples.shape[a], 1) for a in range(0, samples.ndim, 1)]
+        for i in range(0, n_new_samples, 1):
+            idx[batch_axis] = slice(i, i + 1, 1)
+            new_samples[i] = samples[tuple(idx)]
+        return samples
+
 
 class TimePointMemory(_Memory):
     """A simple replay buffer."""
@@ -1143,6 +1177,7 @@ class TimePointMemory(_Memory):
     def add_element(self, states, actions, rewards, next_states):
 
         if states is not None:
+
             self.states.append(states)
             self.actions.append(actions)
             self.rewards.append(rewards)
@@ -1156,39 +1191,8 @@ class TimePointMemory(_Memory):
     def add_list(self, states, actions, rewards, next_states):
 
         for a in range(0, len(states), 1):
-            self.add_element(states=states[a], actions=actions[a], rewards=rewards[a], next_states=next_states)
+            self.add_element(states=states[a], actions=actions[a], rewards=rewards[a], next_states=next_states[a])
         return None
-
-    def add_batch(self, states, actions, rewards, next_states):
-
-        self.add_list(
-            states=self.unbatch_states(states=states), actions=self.unbatch_actions(actions=actions),
-            rewards=self.unbatch_rewards(rewards=rewards), next_states=self.unbatch_states(states=next_states))
-
-        return None
-
-    def unbatch_states(self, states):
-        return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
-
-    def unbatch_actions(self, actions):
-        return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
-
-    def unbatch_rewards(self, rewards):
-        if self.reward_batch_axis is None:
-            # return rewards
-            raise ValueError('reward_batch_axis')
-        else:
-            return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
-
-    def _unbatch(self, samples, batch_axis):
-
-        n_new_samples = samples.shape[batch_axis]
-        new_samples = [None for i in range(0, n_new_samples, 1)]
-        idx = [slice(0, samples.shape[a], 1) for a in range(0, samples.ndim, 1)]
-        for i in range(0, n_new_samples, 1):
-            idx[batch_axis] = slice(i, i + 1, 1)
-            new_samples[i] = samples[tuple(idx)]
-        return samples
 
     def remove_extras(self):
 
@@ -1258,8 +1262,8 @@ class EpisodeMemory(_Memory):
 
         :type capacity: int
 
-        :param add_timepoints_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
-                       some batched observations
+        :param add_timepoints_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or
+            array of some batched observations
         :type add_timepoints_as: str
 
         :type batch_size: int
@@ -1276,10 +1280,11 @@ class EpisodeMemory(_Memory):
             state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis,
             reward_batch_axis=reward_batch_axis)
 
-        self.tmp_states = []
-        self.tmp_actions = []
-        self.tmp_rewards = []
-        self.tmp_next_states = []
+        self.n_agents = None
+        self.tmp_states = None
+        self.tmp_actions = None
+        self.tmp_rewards = None
+        self.tmp_next_states = None
 
         if isinstance(time_size, int):
             self.time_size = time_size
@@ -1331,55 +1336,71 @@ class EpisodeMemory(_Memory):
     def get_tot_observations(self):
         return sum([self.states[i].shape[self.state_time_axis] for i in range(0, self.get_tot_episodes(), 1)])
 
+    def init_episode_vars(self, n_agents=None):
+
+        if self.add_timepoints_as == 's':
+            if n_agents is None or n_agents == 1:
+                self.n_agents = 1
+                self.tmp_states = []
+                self.tmp_actions = []
+                self.tmp_rewards = []
+                self.tmp_next_states = []
+
+            else:
+                raise ValueError('add_timepoints_as and n_agents are not compatible')
+        else:
+            self.n_agents = n_agents
+            self.tmp_states = [[] for a in range(0, self.n_agents, 1)]
+            self.tmp_actions = [[] for a in range(0, self.n_agents, 1)]
+            self.tmp_rewards = [[] for a in range(0, self.n_agents, 1)]
+            self.tmp_next_states = [[] for a in range(0, self.n_agents, 1)]
+
+        return None
+
+
     def add_element(self, states, actions, rewards, next_states):
 
         if states is not None:
-            self.states.append(states)
-            self.actions.append(actions)
-            self.rewards.append(rewards)
-            self.next_states.append(next_states)
-
-            self.current_len = len(self)
-            self.remove_extras()
+            self.tmp_states.append(states)
+            self.tmp_actions.append(actions)
+            self.tmp_rewards.append(rewards)
+            self.tmp_next_states.append(next_states)
 
         return None
 
     def add_list(self, states, actions, rewards, next_states):
 
-        for a in range(0, len(states), 1):
-            self.add_element(states=states[a], actions=actions[a], rewards=rewards[a], next_states=next_states)
+        for a in range(0, self.n_agents, 1):
+            if states[a] is not None:
+                self.tmp_states[a].append(states[a])
+                self.tmp_actions[a].append(actions[a])
+                self.tmp_rewards[a].append(rewards[a])
+                self.tmp_next_states[a].append(next_states[a])
         return None
 
-    def add_batch(self, states, actions, rewards, next_states):
+    def add_episodes(self):
 
-        self.add_list(
-            states=self.unbatch_states(states=states), actions=self.unbatch_actions(actions=actions),
-            rewards=self.unbatch_rewards(rewards=rewards), next_states=self.unbatch_states(states=next_states))
+        if self.add_timepoints_as == 's':
+            # concatenate
 
-        return None
 
-    def unbatch_states(self, states):
-        return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
 
-    def unbatch_actions(self, actions):
-        return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
-
-    def unbatch_rewards(self, rewards):
-        if self.reward_batch_axis is None:
-            # return rewards
-            raise ValueError('reward_batch_axis')
+            # add
+            self.states.append(self.tmp_states)
+            self.actions.append(self.tmp_actions)
+            self.rewards.append(self.tmp_rewards)
+            self.next_states.append(self.tmp_next_states)
         else:
-            return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
+            # concatenate
 
-    def _unbatch(self, samples, batch_axis):
 
-        n_new_samples = samples.shape[batch_axis]
-        new_samples = [None for i in range(0, n_new_samples, 1)]
-        idx = [slice(0, samples.shape[a], 1) for a in range(0, samples.ndim, 1)]
-        for i in range(0, n_new_samples, 1):
-            idx[batch_axis] = slice(i, i + 1, 1)
-            new_samples[i] = samples[tuple(idx)]
-        return samples
+            # add
+            self.states += self.tmp_states
+            self.actions += self.tmp_actions
+            self.rewards += self.tmp_rewards
+            self.next_states += self.tmp_next_states
+
+
 
     def remove_extras(self):
 
