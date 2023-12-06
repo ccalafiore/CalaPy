@@ -541,9 +541,19 @@ class DQNMethods(OutputMethods):
         dashes = '-' * n_dashes
         print(dashes)
 
-        replay_memory = ReplayMemory(
-            capacity=capacity, add_as='s', batch_size=batch_size_of_train,
-            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
+        if self.is_recurrent:
+            multi_episode_memory = MultiEpisodeMemory(
+                capacity=capacity, add_as='s', batch_size=batch_size_of_train, state_batch_axis=state_batch_axis,
+                action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
+            single_episode_memory = SingleEpisodeMemory(
+                capacity=capacity, add_as='s',
+                state_time_axis=state_time_axis,
+                action_time_axis=action_time_axis, reward_time_axis=reward_time_axis)
+        else:
+            observation_memory = ObservationMemory(
+                capacity=capacity, add_as='s', batch_size=batch_size_of_train, state_batch_axis=state_batch_axis,
+                action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
+            single_episode_memory = None
 
         score_per_episode_ep = -math.inf
         highest_score_per_episode = score_per_episode_ep
@@ -1011,9 +1021,7 @@ class DQNMethods(OutputMethods):
         return self.model
 
 
-class MultiObservationMemory:
-    """A simple replay buffer."""
-
+class _Memory:
     def __init__(
             self, capacity, add_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
 
@@ -1067,18 +1075,56 @@ class MultiObservationMemory:
 
         if isinstance(add_as, str):
             self.add_as = add_as.lower()
-            if self.add_as == 's':
-                self.add = self.add_element
-            elif self.add_as == 'l':
-                self.add = self.add_list
-            elif self.add_as == 't':
-                self.add = self.add_batch
+            if self.add_as == 'slt':
+                pass
             else:
                 raise ValueError('add_as')
         else:
             raise TypeError('add_as')
 
         self.current_len = 0
+
+    def __len__(self) -> int:
+        self.current_len = len(self.states)
+        return self.current_len
+
+
+class ObservationMemory(_Memory):
+    """A simple replay buffer."""
+
+    def __init__(
+            self, capacity, add_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
+
+        """
+
+
+        :type capacity: int
+
+        :param add_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
+                       some batched observations
+        :type add_as: str
+
+        :type batch_size: int
+
+        :type state_batch_axis: int
+
+        :type action_batch_axis: int
+
+        :type reward_batch_axis: int | None
+        """
+
+        _Memory.__init__(
+            self=self, capacity=capacity, add_as=add_as, batch_size=batch_size, state_batch_axis=state_batch_axis,
+            action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
+
+        if self.add_as == 's':
+            self.add = self.add_element
+        elif self.add_as == 'l':
+            self.add = self.add_list
+        elif self.add_as == 't':
+            self.add = self.add_batch
+        else:
+            raise ValueError('add_as')
 
     def add(self, states, actions, rewards, next_states):
         return None
@@ -1206,62 +1252,64 @@ class MultiObservationMemory:
 
         return dict(states=states, actions=actions, rewards=rewards, next_states=next_states)
 
-    def __len__(self) -> int:
-        return len(self.states)
-
-
-class SingleEpisodeMemory(MultiObservationMemory):
-    """A simple replay buffer for recurrent models."""
-
-    def __init__(
-            self, capacity, add_as, state_time_axis, action_time_axis, reward_time_axis):
-        """
-
-
-        :type capacity: int
-
-        :param add_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
-                       some batched observations
-        :type add_as: str
-
-        :type state_time_axis: int
-
-        :type action_time_axis: int
-
-        :type reward_time_axis: int | None
-        """
-
-        MultiObservationMemory.__init__(
-            self=self, capacity=capacity, add_as=add_as, batch_size=0,
-            state_batch_axis=state_time_axis, action_batch_axis=action_time_axis,
-            reward_batch_axis=reward_time_axis)
-
-        self.state_time_axis = self.state_batch_axis
-        self.action_time_axis = self.action_batch_axis
-        self.reward_time_axis = self.reward_batch_axis
-
-        delattr(self, 'batch_size')
-        delattr(self, 'state_batch_axis')
-        delattr(self, 'action_batch_axis')
-        delattr(self, 'reward_batch_axis')
-
-        print()
-
     def get_tot_observations(self):
         return len(self)
 
-    def clear(self):
-        print()
 
-    def sample(self):
-        print()
+# class SingleEpisodeMemory(ObservationMemory):
+#     """A simple replay buffer for recurrent models."""
+#
+#     def __init__(
+#             self, capacity, add_as, state_time_axis, action_time_axis, reward_time_axis):
+#         """
+#
+#
+#         :type capacity: int
+#
+#         :param add_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or array of
+#                        some batched observations
+#         :type add_as: str
+#
+#         :type state_time_axis: int
+#
+#         :type action_time_axis: int
+#
+#         :type reward_time_axis: int | None
+#         """
+#
+#         ObservationMemory.__init__(
+#             self=self, capacity=capacity, add_as=add_as, batch_size=0,
+#             state_batch_axis=state_time_axis, action_batch_axis=action_time_axis,
+#             reward_batch_axis=reward_time_axis)
+#
+#         self.state_time_axis = self.state_batch_axis
+#         self.action_time_axis = self.action_batch_axis
+#         self.reward_time_axis = self.reward_batch_axis
+#
+#         # delattr(self, 'batch_size')
+#         # delattr(self, 'state_batch_axis')
+#         # delattr(self, 'action_batch_axis')
+#         # delattr(self, 'reward_batch_axis')
+#
+#         print()
+#
+#     def get_tot_observations(self):
+#         return len(self)
+#
+#     def clear(self):
+#         print()
+#
+#     def sample(self):
+#         print()
 
 
-class MultiEpisodeMemory(MultiObservationMemory):
+class EpisodeMemory(_Memory):
     """A simple replay buffer for recurrent models."""
 
     def __init__(
-            self, capacity, add_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
+            self, capacity, add_as, batch_size, time_size, state_batch_axis, state_time_axis,
+            action_batch_axis, action_time_axis, reward_batch_axis, reward_time_axis):
+
         """
 
 
@@ -1280,16 +1328,48 @@ class MultiEpisodeMemory(MultiObservationMemory):
         :type reward_batch_axis: int | None
         """
 
-        MultiObservationMemory.__init__(
+        _Memory.__init__(
             self=self, capacity=capacity, add_as=add_as, batch_size=batch_size,
             state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis,
             reward_batch_axis=reward_batch_axis)
+
+        self.tmp_states = []
+        self.tmp_actions = []
+        self.tmp_rewards = []
+        self.tmp_next_states = []
+
+        if isinstance(time_size, int):
+            self.time_size = time_size
+        else:
+            raise TypeError('time_size')
+
+        if isinstance(state_time_axis, int):
+            self.state_time_axis = state_time_axis
+        else:
+            raise TypeError('state_time_axis')
+
+        if isinstance(action_time_axis, int):
+            self.action_time_axis = action_time_axis
+        else:
+            raise TypeError('action_time_axis')
+
+        if reward_time_axis is None or isinstance(reward_time_axis, int):
+            self.reward_time_axis = reward_time_axis
+        else:
+            raise TypeError('reward_time_axis')
+
+        if self.state_batch_axis < self.state_time_axis:
+            self.is_batch_axis_first = True
+        elif self.state_batch_axis > self.state_time_axis:
+            self.is_batch_axis_first = False
+        else:
+            raise ValueError()
 
     def get_tot_episodes(self):
         return len(self)
 
     def get_tot_observations(self):
-        return sum([len(self.states[i]) for i in range(0, self.get_tot_episodes(), 1)])
+        return sum([self.states[i].shape[self.state_time_axis] for i in range(0, self.get_tot_episodes(), 1)])
 
     def clear(self):
         print()
