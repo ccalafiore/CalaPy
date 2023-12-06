@@ -1110,11 +1110,12 @@ class _Memory:
         return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
 
     def unbatch_rewards(self, rewards):
-        if self.reward_batch_axis is None:
-            # return rewards
-            raise ValueError('reward_batch_axis')
-        else:
-            return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
+        # if self.reward_batch_axis is None:
+        #     # return rewards
+        #     raise ValueError('reward_batch_axis')
+        # else:
+        #     return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
+        return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
 
     def _unbatch(self, samples, batch_axis):
 
@@ -1240,12 +1241,13 @@ class TimePointMemory(_Memory):
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
         actions = torch.cat(actions, dim=self.action_batch_axis)
 
-        if self.reward_batch_axis is None:
-            device = states.device
-            dtype = states.dtype
-            rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
-        else:
-            rewards = torch.cat(rewards, dim=self.reward_batch_axis)
+        # if self.reward_batch_axis is None:
+        #     device = states.device
+        #     dtype = states.dtype
+        #     rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
+        # else:
+        #     rewards = torch.cat(rewards, dim=self.reward_batch_axis)
+        rewards = torch.cat(rewards, dim=self.reward_batch_axis)
 
         return dict(states=states, actions=actions, rewards=rewards, next_states=next_states)
 
@@ -1301,17 +1303,18 @@ class EpisodeMemory(_Memory):
         else:
             raise TypeError('action_time_axis')
 
-        if reward_time_axis is None or isinstance(reward_time_axis, int):
+        # if reward_time_axis is None or isinstance(reward_time_axis, int):
+        if isinstance(reward_time_axis, int):
             self.reward_time_axis = reward_time_axis
         else:
             raise TypeError('reward_time_axis')
 
-        if self.state_batch_axis < self.state_time_axis:
-            self.is_batch_axis_first = True
-        elif self.state_batch_axis > self.state_time_axis:
-            self.is_batch_axis_first = False
-        else:
-            raise ValueError()
+        # if self.state_batch_axis < self.state_time_axis:
+        #     self.is_batch_axis_first = True
+        # elif self.state_batch_axis > self.state_time_axis:
+        #     self.is_batch_axis_first = False
+        # else:
+        #     raise ValueError()
 
         if self.add_timepoints_as == 's':
             self.add = self.add_element
@@ -1357,7 +1360,6 @@ class EpisodeMemory(_Memory):
 
         return None
 
-
     def add_element(self, states, actions, rewards, next_states):
 
         if states is not None:
@@ -1382,25 +1384,37 @@ class EpisodeMemory(_Memory):
 
         if self.add_timepoints_as == 's':
             # concatenate
-
-
+            new_states = torch.cat(self.tmp_states, dim=self.state_time_axis)
+            new_actions = torch.cat(self.tmp_actions, dim=self.action_time_axis)
+            new_rewards = torch.cat(self.tmp_rewards, dim=self.reward_time_axis)
+            new_next_states = torch.cat(self.tmp_next_states, dim=self.state_time_axis)
 
             # add
-            self.states.append(self.tmp_states)
-            self.actions.append(self.tmp_actions)
-            self.rewards.append(self.tmp_rewards)
-            self.next_states.append(self.tmp_next_states)
+            self.states.append(new_states)
+            self.actions.append(new_actions)
+            self.rewards.append(new_rewards)
+            self.next_states.append(new_next_states)
         else:
             # concatenate
-
+            new_states = [
+                torch.cat(self.tmp_states[a], dim=self.state_time_axis) for a in range(0, self.n_agents, 1)]
+            new_actions = [
+                torch.cat(self.tmp_actions[a], dim=self.action_time_axis) for a in range(0, self.n_agents, 1)]
+            new_rewards = [
+                torch.cat(self.tmp_rewards[a], dim=self.reward_time_axis) for a in range(0, self.n_agents, 1)]
+            new_next_states = [
+                torch.cat(self.tmp_next_states[a], dim=self.state_time_axis) for a in range(0, self.n_agents, 1)]
 
             # add
-            self.states += self.tmp_states
-            self.actions += self.tmp_actions
-            self.rewards += self.tmp_rewards
-            self.next_states += self.tmp_next_states
+            self.states += new_states
+            self.actions += new_actions
+            self.rewards += new_rewards
+            self.next_states += new_next_states
 
-
+        self.tmp_states = None
+        self.tmp_actions = None
+        self.tmp_rewards = None
+        self.tmp_next_states = None
 
     def remove_extras(self):
 
@@ -1448,12 +1462,13 @@ class EpisodeMemory(_Memory):
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
         actions = torch.cat(actions, dim=self.action_batch_axis)
 
-        if self.reward_batch_axis is None:
-            device = states.device
-            dtype = states.dtype
-            rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
-        else:
-            rewards = torch.cat(rewards, dim=self.reward_batch_axis)
+        # if self.reward_batch_axis is None:
+        #     device = states.device
+        #     dtype = states.dtype
+        #     rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
+        # else:
+        #     rewards = torch.cat(rewards, dim=self.reward_batch_axis)
+        rewards = torch.cat(rewards, dim=self.reward_batch_axis)
 
         return dict(states=states, actions=actions, rewards=rewards, next_states=next_states)
 
@@ -1528,3 +1543,13 @@ class TimedDQNMethods(DQNMethods, TimedOutputMethods):
                 values_actions_out[a] = values_actions[a][tuple_indexes_a]
 
         return values_actions_out
+
+
+# todo:
+# remove_extras() in the recurrent memory
+# sample()  in the recurrent memory
+# add time axis in the environment
+# add batch axis in the rewards in the environment
+
+# end indexes in the recurrent memory
+# start indexes in the recurrent memory
