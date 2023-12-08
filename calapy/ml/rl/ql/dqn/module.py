@@ -1023,7 +1023,8 @@ class DQNMethods(OutputMethods):
 
 class _Memory:
     def __init__(
-            self, capacity, add_timepoints_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
+            self, capacity, add_timepoints_as, batch_size, state_batch_axis, is_without_state_batch_axis,
+            action_batch_axis, is_without_action_batch_axis, reward_batch_axis, is_without_reward_batch_axis):
 
         """
 
@@ -1069,7 +1070,7 @@ class _Memory:
         else:
             raise TypeError('action_batch_axis')
 
-        if reward_batch_axis is None or isinstance(reward_batch_axis, int):
+        if isinstance(reward_batch_axis, int):
             self.reward_batch_axis = reward_batch_axis
         else:
             raise TypeError('reward_batch_axis')
@@ -1082,6 +1083,21 @@ class _Memory:
                 raise ValueError('add_timepoints_as')
         else:
             raise TypeError('add_timepoints_as')
+
+        if isinstance(is_without_state_batch_axis, bool):
+            self.is_without_state_batch_axis = is_without_state_batch_axis
+        else:
+            raise TypeError('is_without_state_batch_axis')
+
+        if isinstance(is_without_action_batch_axis, bool):
+            self.is_without_action_batch_axis = is_without_action_batch_axis
+        else:
+            raise TypeError('is_without_action_batch_axis')
+
+        if isinstance(is_without_reward_batch_axis, bool):
+            self.is_without_reward_batch_axis = is_without_reward_batch_axis
+        else:
+            raise TypeError('is_without_reward_batch_axis')
 
         self.current_len = 0
 
@@ -1104,18 +1120,22 @@ class _Memory:
         return None
 
     def unbatch_states(self, states):
-        return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
+        if self.is_without_state_batch_axis:
+            raise ValueError(type(self).__name__ + '.is_without_state_batch_axis')
+        else:
+            return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
 
     def unbatch_actions(self, actions):
-        return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
+        if self.is_without_action_batch_axis:
+            raise ValueError(type(self).__name__ + '.is_without_action_batch_axis')
+        else:
+            return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
 
     def unbatch_rewards(self, rewards):
-        # if self.reward_batch_axis is None:
-        #     # return rewards
-        #     raise ValueError('reward_batch_axis')
-        # else:
-        #     return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
-        return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
+        if self.is_without_reward_batch_axis:
+            raise ValueError(type(self).__name__ + '.is_without_reward_batch_axis')
+        else:
+            return self._unbatch(samples=rewards, batch_axis=self.reward_batch_axis)
 
     def _unbatch(self, samples, batch_axis):
 
@@ -1132,7 +1152,8 @@ class TimePointMemory(_Memory):
     """A simple replay buffer."""
 
     def __init__(
-            self, capacity, add_timepoints_as, batch_size, state_batch_axis, action_batch_axis, reward_batch_axis):
+            self, capacity, add_timepoints_as, batch_size, state_batch_axis, is_without_state_batch_axis,
+            action_batch_axis, is_without_action_batch_axis, reward_batch_axis, is_without_reward_batch_axis):
 
         """
 
@@ -1154,7 +1175,9 @@ class TimePointMemory(_Memory):
 
         _Memory.__init__(
             self=self, capacity=capacity, add_timepoints_as=add_timepoints_as, batch_size=batch_size,
-            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
+            state_batch_axis=state_batch_axis, is_without_state_batch_axis=is_without_state_batch_axis,
+            action_batch_axis=action_batch_axis, is_without_action_batch_axis=is_without_action_batch_axis,
+            reward_batch_axis=reward_batch_axis, is_without_reward_batch_axis=is_without_reward_batch_axis)
 
         if self.add_timepoints_as == 's':
             self.add = self.add_element
@@ -1169,7 +1192,9 @@ class TimePointMemory(_Memory):
         self.__init__(
             capacity=self.capacity, add_timepoints_as=self.add_timepoints_as,
             batch_size=self.batch_size, state_batch_axis=self.state_batch_axis,
-            action_batch_axis=self.action_batch_axis, reward_batch_axis=self.reward_batch_axis)
+            is_without_state_batch_axis=self.is_without_state_batch_axis,
+            action_batch_axis=self.action_batch_axis, is_without_action_batch_axis=self.is_without_action_batch_axis,
+            reward_batch_axis=self.reward_batch_axis, is_without_reward_batch_axis=self.is_without_reward_batch_axis)
         return None
 
     def get_tot_observations(self):
@@ -1179,10 +1204,25 @@ class TimePointMemory(_Memory):
 
         if states is not None:
 
-            self.states.append(states)
-            self.actions.append(actions)
-            self.rewards.append(rewards)
-            self.next_states.append(next_states)
+            if self.is_without_state_batch_axis:
+                self.states.append(torch.unsqueeze(input=states, dim=self.state_batch_axis))
+                self.next_states.append(torch.unsqueeze(input=next_states, dim=self.state_batch_axis))
+            else:
+                self.states.append(states)
+                self.next_states.append(next_states)
+
+            if self.is_without_action_batch_axis:
+                self.actions.append(torch.unsqueeze(input=actions, dim=self.action_batch_axis))
+            else:
+                self.actions.append(actions)
+
+            if not isinstance(rewards, torch.Tensor):
+                rewards = torch.tensor(data=rewards, dtype=states.dtype, device=states.device, requires_grad=False)
+
+            if self.is_without_reward_batch_axis:
+                self.rewards.append(torch.unsqueeze(input=rewards, dim=self.reward_batch_axis))
+            else:
+                self.rewards.append(rewards)
 
             self.current_len = len(self)
             self.remove_extras()
@@ -1236,17 +1276,9 @@ class TimePointMemory(_Memory):
 
             self.current_len = len(self)
 
-
         states = torch.cat(states, dim=self.state_batch_axis)
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
         actions = torch.cat(actions, dim=self.action_batch_axis)
-
-        # if self.reward_batch_axis is None:
-        #     device = states.device
-        #     dtype = states.dtype
-        #     rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
-        # else:
-        #     rewards = torch.cat(rewards, dim=self.reward_batch_axis)
         rewards = torch.cat(rewards, dim=self.reward_batch_axis)
 
         return dict(states=states, actions=actions, rewards=rewards, next_states=next_states)
@@ -1256,8 +1288,10 @@ class EpisodeMemory(_Memory):
     """A simple replay buffer for recurrent models."""
 
     def __init__(
-            self, capacity, add_timepoints_as, batch_size, time_size, state_batch_axis, state_time_axis,
-            action_batch_axis, action_time_axis, reward_batch_axis, reward_time_axis):
+            self, capacity, add_timepoints_as, batch_size, time_size,
+            state_batch_axis, is_without_state_batch_axis, state_time_axis, is_without_state_time_axis,
+            action_batch_axis, is_without_action_batch_axis, action_time_axis, is_without_action_time_axis,
+            reward_batch_axis, is_without_reward_batch_axis, reward_time_axis, is_without_reward_time_axis):
 
         """
 
@@ -1279,8 +1313,9 @@ class EpisodeMemory(_Memory):
 
         _Memory.__init__(
             self=self, capacity=capacity, add_timepoints_as=add_timepoints_as, batch_size=batch_size,
-            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis,
-            reward_batch_axis=reward_batch_axis)
+            state_batch_axis=state_batch_axis, is_without_state_batch_axis=is_without_state_batch_axis,
+            action_batch_axis=action_batch_axis, is_without_action_batch_axis=is_without_action_batch_axis,
+            reward_batch_axis=reward_batch_axis, is_without_reward_batch_axis=is_without_reward_batch_axis)
 
         self.n_agents = None
         self.tmp_states = None
@@ -1303,18 +1338,32 @@ class EpisodeMemory(_Memory):
         else:
             raise TypeError('action_time_axis')
 
-        # if reward_time_axis is None or isinstance(reward_time_axis, int):
         if isinstance(reward_time_axis, int):
             self.reward_time_axis = reward_time_axis
         else:
             raise TypeError('reward_time_axis')
 
-        # if self.state_batch_axis < self.state_time_axis:
-        #     self.is_batch_axis_first = True
-        # elif self.state_batch_axis > self.state_time_axis:
-        #     self.is_batch_axis_first = False
-        # else:
-        #     raise ValueError()
+        if isinstance(is_without_state_time_axis, bool):
+            self.is_without_state_time_axis = is_without_state_time_axis
+        else:
+            raise TypeError('is_without_state_time_axis')
+
+        if isinstance(is_without_action_time_axis, bool):
+            self.is_without_action_time_axis = is_without_action_time_axis
+        else:
+            raise TypeError('is_without_action_time_axis')
+
+        if isinstance(is_without_reward_time_axis, bool):
+            self.is_without_reward_time_axis = is_without_reward_time_axis
+        else:
+            raise TypeError('is_without_reward_time_axis')
+
+        if self.state_batch_axis < self.state_time_axis:
+            self.is_batch_axis_first = True
+        elif self.state_batch_axis > self.state_time_axis:
+            self.is_batch_axis_first = False
+        else:
+            raise ValueError()
 
         if self.add_timepoints_as == 's':
             self.add = self.add_element
@@ -1326,18 +1375,31 @@ class EpisodeMemory(_Memory):
             raise ValueError('add_timepoints_as')
 
     def clear(self):
+
         self.__init__(
             capacity=self.capacity, add_timepoints_as=self.add_timepoints_as, batch_size=self.batch_size,
             time_size=self.time_size, state_batch_axis=self.state_batch_axis, state_time_axis=self.state_time_axis,
             action_batch_axis=self.action_batch_axis, action_time_axis=self.action_time_axis,
-            reward_batch_axis=self.reward_batch_axis, reward_time_axis=self.reward_time_axis)
+            reward_batch_axis=self.reward_batch_axis, reward_time_axis=self.reward_time_axis,
+            is_without_state_batch_axis=self.is_without_state_batch_axis,
+            is_without_state_time_axis=self.is_without_state_time_axis,
+            is_without_action_batch_axis=self.is_without_action_batch_axis,
+            is_without_action_time_axis=self.is_without_action_time_axis,
+            is_without_reward_batch_axis=self.is_without_reward_batch_axis,
+            is_without_reward_time_axis=self.is_without_reward_time_axis)
+
         return None
 
+    def __len__(self):
+        self.current_len = sum(
+            [self.states[i].shape[self.state_time_axis] for i in range(0, self.get_tot_episodes(), 1)])
+        return self.current_len
+
     def get_tot_episodes(self):
-        return len(self)
+        return len(self.states)
 
     def get_tot_observations(self):
-        return sum([self.states[i].shape[self.state_time_axis] for i in range(0, self.get_tot_episodes(), 1)])
+        return len(self)
 
     def init_episode_vars(self, n_agents=None):
 
@@ -1456,7 +1518,6 @@ class EpisodeMemory(_Memory):
                     size=states[i].shape, device=states[i].device, dtype=states[i].dtype, requires_grad=False)
 
             self.current_len = len(self)
-
 
         states = torch.cat(states, dim=self.state_batch_axis)
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
