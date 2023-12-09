@@ -1755,7 +1755,7 @@ class EpisodeMemory(_Memory):
             rewards.append(self.rewards[ep_indexes[i]][reward_indexes_i])
             next_states.append(self.next_states[ep_indexes[i]][state_indexes_i])
 
-            
+
             # states.append(self.states.pop(ep_indexes[i]))
             # actions.append(self.actions.pop(ep_indexes[i]))
             # rewards.append(self.rewards.pop(ep_indexes[i]))
