@@ -1382,6 +1382,8 @@ class EpisodeMemory(_Memory):
         else:
             raise ValueError('add_timepoints_as')
 
+        self.rng = np.random.default_rng()
+
     def clear(self):
 
         self.__init__(
@@ -1710,13 +1712,14 @@ class EpisodeMemory(_Memory):
         if self.batch_size > tot_episodes:
             raise ValueError('self.batch_size > self.get_tot_episodes()')
 
-        indexes = np.random.randint(low=0, high=tot_episodes, size=tuple([self.batch_size]), dtype='i').tolist()
+        # ep_indexes = np.random.permutation(x=tot_episodes).tolist()
+        # ep_indexes = np.random.randint(low=0, high=tot_episodes, size=tuple([self.batch_size]), dtype='i').tolist()
+        ep_indexes = self.rng.choice(
+            a=tot_episodes, size=tuple([self.batch_size]), replace=False, p=None, axis=0, shuffle=True)
 
-        # GET THE TIME LENGTHS
-        # GET THE MIN TIME LENGTH
-
-        # GET THE START AND END TIME INDEXES
-
+        time_lengths_b = [self.states[ep_indexes[i]].shape[self.state_time_axis] for i in range(0, self.batch_size, 1)]
+        min_time_lengths_b = min(time_lengths_b)
+        time_size_b = min(min_time_lengths_b, self.time_size)
 
         states = []
         actions = []
@@ -1724,16 +1727,40 @@ class EpisodeMemory(_Memory):
         next_states = []
         for i in range(0, self.batch_size, 1):
 
-            states.append(self.states[indexes[i]])
-            actions.append(self.actions[indexes[i]])
-            rewards.append(self.rewards[indexes[i]])
-            next_states.append(self.next_states[indexes[i]])
-            # states.append(self.states.pop(indexes[i]))
-            # actions.append(self.actions.pop(indexes[i]))
-            # rewards.append(self.rewards.pop(indexes[i]))
-            # next_states.append(self.next_states.pop(indexes[i]))
+            if time_lengths_b[i] == self.states[ep_indexes[i]].shape[self.state_time_axis]:
+                print('correct')
+            else:
+                print('wrong')
 
-            self.current_len = len(self)
+            start_time_idx_i = np.random.randint(
+                low=0, high=time_lengths_b[i] - time_size_b, size=None, dtype='i').tolist()
+            # end_idx = start_idx + time_size_b
+
+            state_indexes_i = tuple([
+                slice(start_time_idx_i, start_time_idx_i + time_size_b, 1) if d == self.state_time_axis else
+                slice(0, self.states[ep_indexes[i]].shape[d], 1) for d in range(0, self.states[ep_indexes[i]].ndim, 1)])
+
+            action_indexes_i = tuple([
+                slice(start_time_idx_i, start_time_idx_i + time_size_b, 1) if d == self.action_time_axis else
+                slice(0, self.actions[ep_indexes[i]].shape[d], 1)
+                for d in range(0, self.actions[ep_indexes[i]].ndim, 1)])
+
+            reward_indexes_i = tuple([
+                slice(start_time_idx_i, start_time_idx_i + time_size_b, 1) if d == self.reward_time_axis else
+                slice(0, self.rewards[ep_indexes[i]].shape[d], 1)
+                for d in range(0, self.rewards[ep_indexes[i]].ndim, 1)])
+
+            states.append(self.states[ep_indexes[i]][state_indexes_i])
+            actions.append(self.actions[ep_indexes[i]][action_indexes_i])
+            rewards.append(self.rewards[ep_indexes[i]][reward_indexes_i])
+            next_states.append(self.next_states[ep_indexes[i]][state_indexes_i])
+
+            
+            # states.append(self.states.pop(ep_indexes[i]))
+            # actions.append(self.actions.pop(ep_indexes[i]))
+            # rewards.append(self.rewards.pop(ep_indexes[i]))
+            # next_states.append(self.next_states.pop(ep_indexes[i]))
+            # self.current_len = len(self)
 
         states = torch.cat(states, dim=self.state_batch_axis)
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
