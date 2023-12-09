@@ -101,3 +101,36 @@ def generate_noise(shape, sigma=1.0, mu=0.0, generator=None, dtype=None, device=
             noise += mu
 
     return noise
+
+
+def unsqueeze(data, dims, sort=False):
+
+    if isinstance(dims, int):
+        return torch.unsqueeze(input=data, dim=dims)
+    elif isinstance(dims, list):
+        dims_f = dims
+    elif isinstance(dims, tuple):
+        dims_f = list(dims)
+    elif isinstance(dims, (torch.Tensor, np.ndarray)):
+        dims_f = dims.tolist()
+    else:
+        raise TypeError('dims')
+
+    n = len(dims_f)
+    data_f = data
+
+    if sort:
+        for i in range(0, n, 1):
+            if not isinstance(dims_f[i], int):
+                raise TypeError(f'dims[{i:d}]')
+        dims_f = sorted(dims_f)
+        for i in range(0, n, 1):
+            data_f = torch.unsqueeze(input=data_f, dim=dims_f[i])
+    else:
+        for i in range(0, n, 1):
+            if isinstance(dims_f[i], int):
+                data_f = torch.unsqueeze(input=data_f, dim=dims_f[i])
+            else:
+                raise TypeError(f'dims[{i:d}]')
+
+    return data_f

@@ -11,6 +11,7 @@ from ..... import txt as cp_txt
 from ....rl import utilities as cp_rl_utilities
 from .....ml import utilities as cp_ml_utilities
 from ....sl.dl.output_methods.general import *
+from ....sl.dl.tensors import unsqueeze as cp_unsqueeze
 
 
 __all__ = ['DQNMethods', 'TimedDQNMethods']
@@ -1217,12 +1218,14 @@ class TimePointMemory(_Memory):
                 self.actions.append(actions)
 
             if not isinstance(rewards, torch.Tensor):
-                rewards = torch.tensor(data=rewards, dtype=states.dtype, device=states.device, requires_grad=False)
+                rewards_f = torch.tensor(data=rewards, dtype=states.dtype, device=states.device, requires_grad=False)
+            else:
+                rewards_f = rewards
 
             if self.is_without_reward_batch_axis:
-                self.rewards.append(torch.unsqueeze(input=rewards, dim=self.reward_batch_axis))
+                self.rewards.append(torch.unsqueeze(input=rewards_f, dim=self.reward_batch_axis))
             else:
-                self.rewards.append(rewards)
+                self.rewards.append(rewards_f)
 
             self.current_len = len(self)
             self.remove_extras()
@@ -1362,8 +1365,13 @@ class EpisodeMemory(_Memory):
             self.is_batch_axis_first = True
         elif self.state_batch_axis > self.state_time_axis:
             self.is_batch_axis_first = False
+
         else:
-            raise ValueError()
+            raise ValueError('state_batch_axis == state_time_axis')
+
+        self.sorted_state_bt_axes = sorted([self.state_batch_axis, self.state_time_axis])
+        self.sorted_action_bt_axes = sorted([self.action_batch_axis, self.action_time_axis])
+        self.sorted_reward_bt_axes = sorted([self.reward_batch_axis, self.reward_time_axis])
 
         if self.add_timepoints_as == 's':
             self.add = self.add_element
@@ -1422,24 +1430,93 @@ class EpisodeMemory(_Memory):
 
         return None
 
-    def add_element(self, states, actions, rewards, next_states):
+    def add_element(self, states, actions, rewards, next_states, index=None):
 
         if states is not None:
-            self.tmp_states.append(states)
-            self.tmp_actions.append(actions)
-            self.tmp_rewards.append(rewards)
-            self.tmp_next_states.append(next_states)
+
+            if self.is_without_state_batch_axis:
+                if self.is_without_state_time_axis:
+                    states_f = cp_unsqueeze(data=states, dims=self.sorted_state_bt_axes, sort=False)
+
+                    if next_states is None:
+                        next_states_f = torch.zeros(
+                            size=states_f.shape, device=states_f.device, dtype=states_f.dtype, requires_grad=False)
+                    else:
+                        next_states_f = cp_unsqueeze(data=next_states, dims=self.sorted_state_bt_axes, sort=False)
+                else:
+                    states_f = torch.unsqueeze(input=states, dim=self.state_batch_axis)
+                    if next_states is None:
+                        next_states_f = torch.zeros(
+                            size=states_f.shape, device=states_f.device, dtype=states_f.dtype, requires_grad=False)
+                    else:
+                        next_states_f = torch.unsqueeze(input=next_states, dim=self.state_batch_axis)
+            else:
+                if self.is_without_state_time_axis:
+                    states_f = torch.unsqueeze(input=states, dim=self.state_time_axis)
+                    if next_states is None:
+                        next_states_f = torch.zeros(
+                            size=states_f.shape, device=states_f.device, dtype=states_f.dtype, requires_grad=False)
+                    else:
+                        next_states_f = torch.unsqueeze(input=next_states, dim=self.state_time_axis)
+                else:
+                    states_f = states
+                    if next_states is None:
+                        next_states_f = torch.zeros(
+                            size=states_f.shape, device=states_f.device, dtype=states_f.dtype, requires_grad=False)
+                    else:
+                        next_states_f = next_states
+
+            if self.is_without_action_batch_axis:
+                if self.is_without_action_time_axis:
+                    actions_f = cp_unsqueeze(data=actions, dims=self.sorted_action_bt_axes, sort=False)
+                else:
+                    actions_f = torch.unsqueeze(input=actions, dim=self.action_batch_axis)
+            else:
+                if self.is_without_action_time_axis:
+                    actions_f = torch.unsqueeze(input=actions, dim=self.action_time_axis)
+                else:
+                    actions_f = actions
+
+            if not isinstance(rewards, torch.Tensor):
+                rewards_f = torch.tensor(
+                    data=rewards, dtype=states_f.dtype, device=states_f.device, requires_grad=False)
+            else:
+                rewards_f = rewards
+
+            if self.is_without_reward_batch_axis:
+                if self.is_without_reward_time_axis:
+                    rewards_f = cp_unsqueeze(data=rewards, dims=self.sorted_reward_bt_axes, sort=False)
+                else:
+                    rewards_f = torch.unsqueeze(input=rewards, dim=self.reward_batch_axis)
+            else:
+                if self.is_without_reward_time_axis:
+                    rewards_f = torch.unsqueeze(input=rewards, dim=self.reward_time_axis)
+                else:
+                    rewards_f = rewards
+
+            if self.add_timepoints_as == 's':
+                self.tmp_states.append(states_f)
+                self.tmp_actions.append(actions_f)
+                self.tmp_rewards.append(rewards_f)
+                self.tmp_next_states.append(next_states_f)
+            else:
+                self.tmp_states[index].append(states_f)
+                self.tmp_actions[index].append(actions_f)
+                self.tmp_rewards[index].append(rewards_f)
+                self.tmp_next_states[index].append(next_states_f)
 
         return None
 
     def add_list(self, states, actions, rewards, next_states):
 
         for a in range(0, self.n_agents, 1):
-            if states[a] is not None:
-                self.tmp_states[a].append(states[a])
-                self.tmp_actions[a].append(actions[a])
-                self.tmp_rewards[a].append(rewards[a])
-                self.tmp_next_states[a].append(next_states[a])
+            if states is not None:
+                self.add_element(
+                    states=states[a], actions=actions[a], rewards=rewards[a], next_states=next_states[a], index=a)
+            #     self.tmp_states[a].append(states[a])
+            #     self.tmp_actions[a].append(actions[a])
+            #     self.tmp_rewards[a].append(rewards[a])
+            #     self.tmp_next_states[a].append(next_states[a])
         return None
 
     def add_episodes(self):
@@ -1451,11 +1528,55 @@ class EpisodeMemory(_Memory):
             new_rewards = torch.cat(self.tmp_rewards, dim=self.reward_time_axis)
             new_next_states = torch.cat(self.tmp_next_states, dim=self.state_time_axis)
 
-            # add
-            self.states.append(new_states)
-            self.actions.append(new_actions)
-            self.rewards.append(new_rewards)
-            self.next_states.append(new_next_states)
+            if new_states.shape[self.state_time_axis] > self.time_size:
+
+                first_state_indexes = tuple([
+                    slice(0, self.time_size, 1) if d == self.state_time_axis else
+                    slice(0, new_states.shape[d], 1) for d in range(0, new_states.ndim, 1)])
+
+                last_state_indexes = tuple([
+                    slice(new_states.shape[d] - self.time_size, new_states.shape[d], 1)
+                    if d == self.state_time_axis else
+                    slice(0, new_states.shape[d], 1) for d in range(0, new_states.ndim, 1)])
+
+                first_action_indexes = tuple([
+                    slice(0, self.time_size, 1) if d == self.action_time_axis else
+                    slice(0, new_actions.shape[d], 1) for d in range(0, new_actions.ndim, 1)])
+
+                last_action_indexes = tuple([
+                    slice(new_actions.shape[d] - self.time_size, new_actions.shape[d], 1)
+                    if d == self.action_time_axis else
+                    slice(0, new_actions.shape[d], 1) for d in range(0, new_actions.ndim, 1)])
+
+                first_reward_indexes = tuple([
+                    slice(0, self.time_size, 1) if d == self.reward_time_axis else
+                    slice(0, new_rewards.shape[d], 1) for d in range(0, new_rewards.ndim, 1)])
+
+                last_reward_indexes = tuple([
+                    slice(new_rewards.shape[d] - self.time_size, new_rewards.shape[d], 1)
+                    if d == self.reward_time_axis else
+                    slice(0, new_rewards.shape[d], 1) for d in range(0, new_rewards.ndim, 1)])
+
+                new_states = [new_states, new_states[first_state_indexes], new_states[last_state_indexes]]
+
+                new_actions = [new_actions, new_actions[first_action_indexes], new_actions[last_action_indexes]]
+
+                new_rewards = [new_rewards, new_rewards[first_reward_indexes], new_rewards[last_reward_indexes]]
+
+                new_next_states = [
+                    new_next_states, new_next_states[first_state_indexes], new_next_states[last_state_indexes]]
+
+                # add
+                self.states += new_states
+                self.actions += new_actions
+                self.rewards += new_rewards
+                self.next_states += new_next_states
+            else:
+                # add
+                self.states.append(new_states)
+                self.actions.append(new_actions)
+                self.rewards.append(new_rewards)
+                self.next_states.append(new_next_states)
         else:
             # concatenate
             new_states = [
@@ -1466,6 +1587,60 @@ class EpisodeMemory(_Memory):
                 torch.cat(self.tmp_rewards[a], dim=self.reward_time_axis) for a in range(0, self.n_agents, 1)]
             new_next_states = [
                 torch.cat(self.tmp_next_states[a], dim=self.state_time_axis) for a in range(0, self.n_agents, 1)]
+
+            first_new_states = []
+            first_new_actions = []
+            first_new_rewards = []
+            first_new_next_states = []
+
+            last_new_states = []
+            last_new_actions = []
+            last_new_rewards = []
+            last_new_next_states = []
+            for a in range(0, self.n_agents, 1):
+
+                if new_states[a].shape[self.state_time_axis] > self.time_size:
+                    first_state_indexes_a = tuple([
+                        slice(0, self.time_size, 1) if d == self.state_time_axis else
+                        slice(0, new_states[a].shape[d], 1) for d in range(0, new_states[a].ndim, 1)])
+
+                    last_state_indexes_a = tuple([
+                        slice(new_states[a].shape[d] - self.time_size, new_states[a].shape[d], 1)
+                        if d == self.state_time_axis else
+                        slice(0, new_states[a].shape[d], 1) for d in range(0, new_states[a].ndim, 1)])
+
+                    first_action_indexes_a = tuple([
+                        slice(0, self.time_size, 1) if d == self.action_time_axis else
+                        slice(0, new_actions[a].shape[d], 1) for d in range(0, new_actions[a].ndim, 1)])
+
+                    last_action_indexes_a = tuple([
+                        slice(new_actions[a].shape[d] - self.time_size, new_actions[a].shape[d], 1)
+                        if d == self.action_time_axis else
+                        slice(0, new_actions[a].shape[d], 1) for d in range(0, new_actions[a].ndim, 1)])
+
+                    first_reward_indexes_a = tuple([
+                        slice(0, self.time_size, 1) if d == self.reward_time_axis else
+                        slice(0, new_rewards[a].shape[d], 1) for d in range(0, new_rewards[a].ndim, 1)])
+
+                    last_reward_indexes_a = tuple([
+                        slice(new_rewards[a].shape[d] - self.time_size, new_rewards[a].shape[d], 1)
+                        if d == self.reward_time_axis else
+                        slice(0, new_rewards[a].shape[d], 1) for d in range(0, new_rewards[a].ndim, 1)])
+
+                    first_new_states.append(new_states[a][first_state_indexes_a])
+                    first_new_actions.append(new_actions[a][first_action_indexes_a])
+                    first_new_rewards.append(new_rewards[a][first_reward_indexes_a])
+                    first_new_next_states.append(new_next_states[a][first_state_indexes_a])
+
+                    last_new_states.append(new_states[a][last_state_indexes_a])
+                    last_new_actions.append(new_actions[a][last_action_indexes_a])
+                    last_new_rewards.append(new_rewards[a][last_reward_indexes_a])
+                    last_new_next_states.append(new_next_states[a][last_state_indexes_a])
+
+            new_states = new_states + first_new_states + last_new_states
+            new_actions = new_actions + first_new_actions + last_new_actions
+            new_rewards = new_rewards + first_new_rewards + last_new_rewards
+            new_next_states = new_next_states + first_new_next_states + last_new_next_states
 
             # add
             self.states += new_states
@@ -1478,27 +1653,70 @@ class EpisodeMemory(_Memory):
         self.tmp_rewards = None
         self.tmp_next_states = None
 
+        self.current_len = len(self)
+        self.remove_extras()
+
     def remove_extras(self):
 
-        n_extras = self.current_len - self.capacity
+        n_extras = len(self) - self.capacity
 
         if n_extras > 0:
-            self.states = self.states[slice(n_extras, self.current_len, 1)]
 
-            self.actions = self.actions[slice(n_extras, self.current_len, 1)]
+            tot_episodes = self.get_tot_episodes()
+            tot_episodes_minus_one = tot_episodes - 1
 
-            self.rewards = self.rewards[slice(n_extras, self.current_len, 1)]
+            cum_time_points = 0
+            i = 0
+            while (n_extras > cum_time_points) and (i < tot_episodes_minus_one):
+                cum_time_points += self.states[i].shape[self.state_time_axis]
+                i += 1
 
-            self.next_states = self.next_states[slice(n_extras, self.current_len, 1)]
+            if cum_time_points > n_extras:
+                i -= 1
 
-            self.current_len = len(self)
+            if i > 0:
+                self.states = self.states[slice(i, tot_episodes, 1)]
+                self.actions = self.actions[slice(i, tot_episodes, 1)]
+                self.rewards = self.rewards[slice(i, tot_episodes, 1)]
+                self.next_states = self.next_states[slice(i, tot_episodes, 1)]
+                n_extras = len(self) - self.capacity
+
+            if n_extras > 0:
+                state_indexes_0 = tuple([
+                    slice(n_extras, self.states[0].shape[d], 1) if d == self.state_time_axis else
+                    slice(0, self.states[0].shape[d], 1) for d in range(0, self.states[0].ndim, 1)])
+
+                action_indexes_0 = tuple([
+                    slice(n_extras, self.actions[0].shape[d], 1) if d == self.action_time_axis else
+                    slice(0, self.actions[0].shape[d], 1) for d in range(0, self.actions[0].ndim, 1)])
+
+                reward_indexes_0 = tuple([
+                    slice(n_extras, self.rewards[0].shape[d], 1) if d == self.reward_time_axis else
+                    slice(0, self.rewards[0].shape[d], 1) for d in range(0, self.rewards[0].ndim, 1)])
+
+                self.states[0] = self.states[0][state_indexes_0]
+                self.actions[0] = self.actions[0][action_indexes_0]
+                self.rewards[0] = self.rewards[0][reward_indexes_0]
+                self.next_states[0] = self.next_states[0][state_indexes_0]
+
+                self.current_len = len(self)
 
         return None
 
     def sample(self):
 
-        if self.batch_size > self.current_len:
-            raise ValueError('self.batch_size > self.current_len')
+        tot_episodes = self.get_tot_episodes()
+
+        if self.batch_size > tot_episodes:
+            raise ValueError('self.batch_size > self.get_tot_episodes()')
+
+        indexes = np.random.randint(low=0, high=tot_episodes, size=tuple([self.batch_size]), dtype='i').tolist()
+
+        # GET THE TIME LENGTHS
+        # GET THE MIN TIME LENGTH
+
+        # GET THE START AND END TIME INDEXES
+
 
         states = []
         actions = []
@@ -1506,29 +1724,20 @@ class EpisodeMemory(_Memory):
         next_states = []
         for i in range(0, self.batch_size, 1):
 
-            index = np.random.randint(low=0, high=self.current_len, size=None, dtype='i').tolist()
-
-            states.append(self.states.pop(index))
-            actions.append(self.actions.pop(index))
-            rewards.append(self.rewards.pop(index))
-            next_states.append(self.next_states.pop(index))
-
-            if next_states[i] is None:
-                next_states[i] = torch.zeros(
-                    size=states[i].shape, device=states[i].device, dtype=states[i].dtype, requires_grad=False)
+            states.append(self.states[indexes[i]])
+            actions.append(self.actions[indexes[i]])
+            rewards.append(self.rewards[indexes[i]])
+            next_states.append(self.next_states[indexes[i]])
+            # states.append(self.states.pop(indexes[i]))
+            # actions.append(self.actions.pop(indexes[i]))
+            # rewards.append(self.rewards.pop(indexes[i]))
+            # next_states.append(self.next_states.pop(indexes[i]))
 
             self.current_len = len(self)
 
         states = torch.cat(states, dim=self.state_batch_axis)
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
         actions = torch.cat(actions, dim=self.action_batch_axis)
-
-        # if self.reward_batch_axis is None:
-        #     device = states.device
-        #     dtype = states.dtype
-        #     rewards = torch.tensor(data=rewards, device=device, dtype=dtype, requires_grad=False)
-        # else:
-        #     rewards = torch.cat(rewards, dim=self.reward_batch_axis)
         rewards = torch.cat(rewards, dim=self.reward_batch_axis)
 
         return dict(states=states, actions=actions, rewards=rewards, next_states=next_states)
