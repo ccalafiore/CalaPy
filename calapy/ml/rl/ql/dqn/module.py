@@ -572,13 +572,10 @@ class DQNMethods(OutputMethods):
 
         directory_stats = os.path.join(directory_outputs, 'stats.csv')
 
-        was_not_optimised = True
-        
         n_decimals_for_printing = 6
         n_dashes = 150
         dashes = '-' * n_dashes
         print(dashes)
-
 
         if self.is_recurrent:
 
@@ -822,74 +819,79 @@ class DQNMethods(OutputMethods):
                     running_sum_scores_ep = sum(environment[phase_name_p].get_scores(), start=running_sum_scores_ep)
                     running_sum_cum_rewards_ep = sum(cum_rewards_epi, start=running_sum_cum_rewards_ep)
 
+                    i += n_episodes_epi
+                    j += n_episodes_epi
+
                     if phase_name_p == 'training':
                         if self.is_recurrent:
                             memory.add_episodes()
+                            memory_tot_episodes = memory.get_tot_episodes()
+                            memory_tot_time_points = memory.get_tot_observations()
+                            memory_has_enough_samples_for_optim = (
+                                    (memory_tot_time_points >= min_n_samples_for_optim) and
+                                    (memory_tot_episodes >= batch_size_of_train))
+                        else:
+                            memory_tot_time_points = memory.get_tot_observations()
+                            memory_has_enough_samples_for_optim = (
+                                    (memory_tot_time_points >= min_n_samples_for_optim) and
+                                    (memory_tot_time_points >= batch_size_of_train))
 
-                        if j >= min_n_episodes_for_optim:
-                            while ((replay_memory.current_len >= min_n_samples_for_optim) and
-                                   (replay_memory.current_len >= batch_size_of_train) and are_more_episodes_needed):
+                        if (j >= min_n_episodes_for_optim) and memory_has_enough_samples_for_optim:
 
-                                samples_epb = replay_memory.sample()
-                                states_epb = samples_epb['states']
-                                actions_epb = samples_epb['actions']
-                                rewards_epb = samples_epb['rewards']
-                                next_states_epb = samples_epb['next_states']
+                            samples_epb = memory.sample()
+                            states_epb = samples_epb['states']
+                            actions_epb = samples_epb['actions']
+                            rewards_epb = samples_epb['rewards']
+                            next_states_epb = samples_epb['next_states']
 
-                                if self.is_recurrent:
-                                    next_values_actions_epb, next_hc_epb = self.model(
-                                        x=next_states_epb[0], h=next_states_epb[1])
-                                else:
-                                    next_values_actions_epb = self.model(x=next_states_epb)
+                            if self.is_recurrent:
+                                next_values_actions_epb, next_hc_epb = self.model(
+                                    x=next_states_epb[0], h=next_states_epb[1])
+                            else:
+                                next_values_actions_epb = self.model(x=next_states_epb)
 
-                                expected_values_actions_epb = self.compute_expected_values_actions(
-                                    next_values_actions=next_values_actions_epb, rewards=rewards_epb)
+                            expected_values_actions_epb = self.compute_expected_values_actions(
+                                next_values_actions=next_values_actions_epb, rewards=rewards_epb)
 
-                                optimizer.zero_grad()
+                            optimizer.zero_grad()
 
-                                # forward
-                                # track history
-                                torch.set_grad_enabled(True)
-                                self.model.unfreeze()
+                            # forward
+                            # track history
+                            torch.set_grad_enabled(True)
+                            self.model.unfreeze()
 
-                                if self.is_recurrent:
-                                    values_actions_epb, hc_epb = self.model(x=states_epb[0], h=states_epb[1])
-                                else:
-                                    values_actions_epb = self.model(x=states_epb)
+                            if self.is_recurrent:
+                                values_actions_epb, hc_epb = self.model(x=states_epb[0], h=states_epb[1])
+                            else:
+                                values_actions_epb = self.model(x=states_epb)
 
-                                values_selected_actions_epb = self.gather_values_selected_actions(
-                                    values_actions=values_actions_epb, actions=actions_epb)
+                            values_selected_actions_epb = self.gather_values_selected_actions(
+                                values_actions=values_actions_epb, actions=actions_epb)
 
-                                value_action_losses_epb = self.compute_value_action_losses(
-                                    values_selected_actions=values_selected_actions_epb,
-                                    expected_values_actions=expected_values_actions_epb)
+                            value_action_losses_epb = self.compute_value_action_losses(
+                                values_selected_actions=values_selected_actions_epb,
+                                expected_values_actions=expected_values_actions_epb)
 
-                                scaled_value_action_loss_epb = self.reduce_value_action_losses(
-                                    value_action_losses=value_action_losses_epb, axes_not_included=None,
-                                    scaled=True, loss_scales_actors=None, format_scales=False)
+                            scaled_value_action_loss_epb = self.reduce_value_action_losses(
+                                value_action_losses=value_action_losses_epb, axes_not_included=None,
+                                scaled=True, loss_scales_actors=None, format_scales=False)
 
-                                scaled_value_action_loss_epb.backward()
-                                optimizer.step()
+                            scaled_value_action_loss_epb.backward()
+                            optimizer.step()
 
-                                self.model.freeze()
-                                torch.set_grad_enabled(False)
+                            self.model.freeze()
+                            torch.set_grad_enabled(False)
 
-                                s += replay_memory.batch_size
-                                b += 1
-                                j = 0
+                            if self.is_recurrent:
+                                s += (states_epb.shape[state_batch_axis] * states_epb.shape[state_time_axis])
+                            else:
+                                s += states_epb.shape[state_batch_axis]
 
-                                are_more_episodes_needed = s < tot_observations_per_train_phase
+                            b += 1
+                            j = 0
 
-                                was_not_optimised = False
+                            are_more_episodes_needed = s < tot_observations_per_train_phase
 
-                    i += n_episodes_epi
-                    if was_not_optimised:
-                        j += n_episodes_epi
-                    else:
-                        was_not_optimised = True
-
-                    if phase_name_p == 'training':
-                        are_more_episodes_needed = s < tot_observations_per_train_phase # this line is not necessary
                     elif phase_name_p == 'validation':
                         are_more_episodes_needed = i < n_episodes_per_val_phase
                     else:
@@ -1157,10 +1159,11 @@ class _Memory:
             return self._unbatch(samples=states, batch_axis=self.state_batch_axis)
 
     def unbatch_actions(self, actions):
-        if self.is_without_action_batch_axis:
-            raise ValueError(type(self).__name__ + '.is_without_action_batch_axis')
-        else:
-            return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
+        # if self.is_without_action_batch_axis:
+        #     raise ValueError(type(self).__name__ + '.is_without_action_batch_axis')
+        # else:
+        #     return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
+        return self._unbatch(samples=actions, batch_axis=self.action_batch_axis)
 
     def unbatch_rewards(self, rewards):
         if self.is_without_reward_batch_axis:
@@ -1282,16 +1285,20 @@ class TimePointMemory(_Memory):
 
             index = np.random.randint(low=0, high=self.current_len, size=None, dtype='i').tolist()
 
-            states.append(self.states.pop(index))
-            actions.append(self.actions.pop(index))
-            rewards.append(self.rewards.pop(index))
-            next_states.append(self.next_states.pop(index))
+            states.append(self.states[index])
+            actions.append(self.actions[index])
+            rewards.append(self.rewards[index])
+            next_states.append(self.next_states[index])
+
+            # states.append(self.states.pop(index))
+            # actions.append(self.actions.pop(index))
+            # rewards.append(self.rewards.pop(index))
+            # next_states.append(self.next_states.pop(index))
+            # self.current_len = len(self)
 
             if next_states[i] is None:
                 next_states[i] = torch.zeros(
                     size=states[i].shape, device=states[i].device, dtype=states[i].dtype, requires_grad=False)
-
-            self.current_len = len(self)
 
         states = torch.cat(states, dim=self.state_batch_axis)
         next_states = torch.cat(next_states, dim=self.state_batch_axis)
