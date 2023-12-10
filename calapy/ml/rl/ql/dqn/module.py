@@ -404,9 +404,10 @@ class DQNMethods(OutputMethods):
 
     def train_from_ind_agents(
             self, environment, optimizer,
-            state_batch_axis, action_batch_axis, reward_batch_axis,
-            U=10, E=None,
-            n_batches_per_train_phase=100, batch_size_of_train=100, T_train=None,
+            is_without_state_batch_axis, is_without_state_time_axis,
+            is_without_reward_batch_axis, is_without_reward_time_axis,
+            state_batch_axis, state_time_axis, action_batch_axis, action_time_axis, reward_batch_axis, reward_time_axis,
+            U=10, E=None, n_batches_per_train_phase=100, batch_size_of_train=100, time_size=10, T_train=None,
             epsilon_start=.95, epsilon_end=.01, epsilon_step=-.05,  capacity=100000,
             min_n_episodes_for_optim=2, min_n_samples_for_optim=1000,
             n_episodes_per_val_phase=1000, T_val=None, directory_outputs=None):
@@ -414,24 +415,58 @@ class DQNMethods(OutputMethods):
         """
 
         :type environment:
+
         :type optimizer:
-        :type state_batch_axis:
-        :type action_batch_axis:
-        :type reward_batch_axis:
-        :type U:
-        :type E:
-        :type n_batches_per_train_phase:
-        :type batch_size_of_train:
-        :type T_train:
+
+        :type is_without_state_batch_axis: bool
+
+        :type is_without_state_time_axis: bool
+
+        :type is_without_reward_batch_axis: bool
+
+        :type is_without_reward_time_axis: bool
+
+        :type state_batch_axis: int
+
+        :type state_time_axis: int
+
+        :type action_batch_axis: int
+
+        :type action_time_axis: int
+
+        :type reward_batch_axis: int
+
+        :type reward_time_axis: int
+
+        :type U: int | float | None
+
+        :type E: int | float | None
+
+        :type n_batches_per_train_phase: int
+
+        :type batch_size_of_train: int
+
+        :type time_size: int
+
+        :type T_train: int | float | None
+
         :type epsilon_start: np.ndarray[float]
+
         :type epsilon_end: np.ndarray[float]
+
         :type epsilon_step: np.ndarray[float]
+
         :type capacity: int
-        :type min_n_episodes_for_optim:
-        :type min_n_samples_for_optim:
-        :type n_episodes_per_val_phase:
-        :type T_val:
-        :type directory_outputs:
+
+        :type min_n_episodes_for_optim: int
+
+        :type min_n_samples_for_optim: int
+
+        :type n_episodes_per_val_phase: int
+
+        :type T_val: int
+
+        :type directory_outputs: str | None
         """
 
         cp_timer = cp_clock.Timer()
@@ -537,24 +572,33 @@ class DQNMethods(OutputMethods):
 
         directory_stats = os.path.join(directory_outputs, 'stats.csv')
 
+        was_not_optimised = True
+        
         n_decimals_for_printing = 6
         n_dashes = 150
         dashes = '-' * n_dashes
         print(dashes)
 
+
         if self.is_recurrent:
-            multi_episode_memory = MultiEpisodeMemory(
-                capacity=capacity, add_timepoints_as='s', batch_size=batch_size_of_train, state_batch_axis=state_batch_axis,
-                action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
-            single_episode_memory = SingleEpisodeMemory(
-                capacity=capacity, add_timepoints_as='s',
-                state_time_axis=state_time_axis,
-                action_time_axis=action_time_axis, reward_time_axis=reward_time_axis)
+
+            memory = EpisodeMemory(
+                capacity=capacity, add_timepoints_as='l', batch_size=batch_size_of_train, time_size=time_size,
+                is_without_state_batch_axis=False, is_without_state_time_axis=False,
+                is_without_reward_batch_axis=is_without_reward_batch_axis,
+                is_without_reward_time_axis=is_without_reward_time_axis,
+                state_batch_axis=state_batch_axis, state_time_axis=state_time_axis,
+                action_batch_axis=action_batch_axis, action_time_axis=action_time_axis,
+                reward_batch_axis=reward_batch_axis, reward_time_axis=reward_time_axis)
+
+            sorted_state_bt_axes = memory.sorted_state_bt_axes
         else:
-            observation_memory = ObservationMemory(
-                capacity=capacity, add_timepoints_as='s', batch_size=batch_size_of_train, state_batch_axis=state_batch_axis,
-                action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
-            single_episode_memory = None
+            memory = TimePointMemory(
+                capacity=capacity, add_timepoints_as='l', batch_size=batch_size_of_train,
+                is_without_state_batch_axis=False, is_without_reward_batch_axis=is_without_reward_batch_axis,
+                state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis,
+                reward_batch_axis=reward_batch_axis)
+            sorted_state_bt_axes = None
 
         score_per_episode_ep = -math.inf
         highest_score_per_episode = score_per_episode_ep
@@ -618,27 +662,42 @@ class DQNMethods(OutputMethods):
 
                 while are_more_episodes_needed:
 
-                    observation_epit = environment[phase_name_p].reset()
+                    observation_epit = copy.deepcopy(environment[phase_name_p].reset())
+
+                    if is_without_state_batch_axis or (self.is_recurrent and is_without_state_time_axis):
+                        for a in range(0, environment[phase_name_p].n_agents, 1):
+                            if observation_epit[a] is not None:
+                                if is_without_state_batch_axis:
+                                    if self.is_recurrent and is_without_state_time_axis:
+                                        observation_epit[a] = cp_unsqueeze(
+                                            data=observation_epit[a], dims=sorted_state_bt_axes, sort=False)
+                                    else:
+                                        observation_epit[a] = torch.unsqueeze(
+                                            input=observation_epit[a], dim=state_batch_axis)
+                                elif self.is_recurrent and is_without_state_time_axis:
+                                    observation_epit[a] = torch.unsqueeze(
+                                        input=observation_epit[a], dim=state_time_axis)
+
+                    state_epit = copy.deepcopy(observation_epit)
 
                     if self.is_recurrent:
+                        if phase_name_p == 'training':
+                            memory.init_episode_vars(n_agents=environment[phase_name_p].n_agents)
+
                         hc_epit = [
                             None if observation_epit[a] is None else self.model.init_h(
                                 batch_shape=self.model.get_batch_shape_from_input_shape(
                                     input_shape=observation_epit[a].shape))
                             for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
 
-                        state_epit = [
-                            None if observation_epit[a] is None else copy.deepcopy([observation_epit[a], hc_epit[a]])
-                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
-
                         values_actions_epit = [
                             None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
                         for a in range(0, environment[phase_name_p].n_agents, 1):
                             if state_epit[a] is not None:
-                                values_actions_epit[a], hc_epit[a] = self.model(x=state_epit[a][0], h=state_epit[a][1])
+                                values_actions_epit[a], hc_epit[a] = self.model(x=state_epit[a], h=hc_epit[a])
                     else:
                         hc_epit = None
-                        state_epit = copy.deepcopy(observation_epit)
+
                         values_actions_epit = [
                             None if state_epit[a] is None else self.model(x=state_epit[a])
                             for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
@@ -667,8 +726,30 @@ class DQNMethods(OutputMethods):
                             None if action_epit[a] is None else self.compute_deltas(action_epit[a])
                             for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
 
-                        next_observation_epit, reward_epit, obs_iterator.not_over = environment[phase_name_p].step(
-                            deltas=delta_epit)
+                        next_observation_epit, reward_epit, obs_iterator.not_over = copy.deepcopy(
+                            environment[phase_name_p].step(deltas=delta_epit))
+
+                        for a in range(0, environment[phase_name_p].n_agents, 1):
+                            if state_epit[a] is not None:
+                                time_lengths_epi[a] += 1
+                                if isinstance(reward_epit[a], (torch.Tensor, np.ndarray)):
+                                    cum_rewards_epi[a] += reward_epit[a].item()
+                                else:
+                                    cum_rewards_epi[a] += reward_epit[a]
+
+                        if is_without_state_batch_axis or (self.is_recurrent and is_without_state_time_axis):
+                            for a in range(0, environment[phase_name_p].n_agents, 1):
+                                if next_observation_epit[a] is not None:
+                                    if is_without_state_batch_axis:
+                                        if self.is_recurrent and is_without_state_time_axis:
+                                            next_observation_epit[a] = cp_unsqueeze(
+                                                data=next_observation_epit[a], dims=sorted_state_bt_axes, sort=False)
+                                        else:
+                                            next_observation_epit[a] = torch.unsqueeze(
+                                                input=next_observation_epit[a], dim=state_batch_axis)
+                                    elif self.is_recurrent and is_without_state_time_axis:
+                                        next_observation_epit[a] = torch.unsqueeze(
+                                            input=next_observation_epit[a], dim=state_time_axis)
 
                         next_observation_with_zeros_epit = [
                             None if observation_epit[a] is None
@@ -678,44 +759,20 @@ class DQNMethods(OutputMethods):
                             if next_observation_epit[a] is None else next_observation_epit[a]
                             for a in range(0, environment[phase_name_p].n_agents, 1)]
 
+                        next_state_epit = copy.deepcopy(next_observation_with_zeros_epit)
+
                         if self.is_recurrent:
-
-                            next_state_epit = [
-                                None if next_observation_with_zeros_epit[a] is None
-                                else copy.deepcopy([next_observation_with_zeros_epit[a], hc_epit[a]])
-                                for a in range(0, environment[phase_name_p].n_agents, 1)]
-
                             next_values_actions_epit = [
                                 None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
                             for a in range(0, environment[phase_name_p].n_agents, 1):
                                 if next_state_epit[a] is not None:
                                     next_values_actions_epit[a], hc_epit[a] = self.model(
-                                        x=next_state_epit[a][0], h=next_state_epit[a][1])
+                                        x=next_state_epit[a], h=hc_epit[a])
                         else:
-                            next_state_epit = copy.deepcopy(next_observation_with_zeros_epit)
-
                             next_values_actions_epit = [
                                 None if next_state_epit[a] is None else self.model(x=next_state_epit[a])
                                 for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
 
-                        for a in range(0, environment[phase_name_p].n_agents, 1):
-                            if state_epit[a] is not None:
-                                time_lengths_epi[a] += 1
-                                if reward_batch_axis is None:
-                                    cum_rewards_epi[a] += reward_epit[a]
-                                else:
-                                    cum_rewards_epi[a] += reward_epit[a].squeeze(dim=reward_batch_axis).tolist()
-
-                                if phase_name_p == 'training':
-                                    replay_memory.add(
-                                        states=state_epit[a], actions=action_epit[a], rewards=reward_epit[a],
-                                        next_states=next_state_epit[a])
-
-                        # values_selected_actions_epit = [
-                        #     None if values_actions_epit[a] is None
-                        #     else self.gather_values_selected_actions(
-                        #         values_actions=values_actions_epit[a], actions=action_epit[a])
-                        #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
                         values_selected_actions_epit = torch.cat([
                             self.gather_values_selected_actions(
                                 values_actions=values_actions_epit[a], actions=action_epit[a])
@@ -723,11 +780,6 @@ class DQNMethods(OutputMethods):
                             if values_actions_epit[a] is not None],
                             dim=action_batch_axis)
 
-                        # expected_values_actions_epit = [
-                        #     None if next_values_actions_epit[a] is None else
-                        #     self.compute_expected_values_actions(
-                        #         next_values_actions=next_values_actions_epit[a], rewards=reward_epit[a])
-                        #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
                         expected_values_actions_epit = torch.cat([
                             self.compute_expected_values_actions(
                                 next_values_actions=next_values_actions_epit[a], rewards=reward_epit[a])
@@ -735,12 +787,6 @@ class DQNMethods(OutputMethods):
                             if next_values_actions_epit[a] is not None],
                             dim=action_batch_axis)
 
-                        # value_action_losses_epit = [
-                        #     None if values_selected_actions_epit[a] is None else
-                        #     self.compute_value_action_losses(
-                        #         values_selected_actions=values_selected_actions_epit[a],
-                        #         expected_values_actions=expected_values_actions_epit[a])
-                        #     for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
                         value_action_losses_epit = self.compute_value_action_losses(
                             values_selected_actions=values_selected_actions_epit,
                             expected_values_actions=expected_values_actions_epit)
@@ -755,17 +801,9 @@ class DQNMethods(OutputMethods):
                         running_n_selected_actions_ep += n_selected_actions_epit
                         running_loss_ep += (scaled_value_action_loss_epit.item() * n_selected_actions_epit)
 
-                        # if reward_batch_axis is None:
-                        #     batched_rewards_epit = torch.tensor(
-                        #         data=reward_epit, device=self.device, dtype=self.dtype, requires_grad=False)
-                        # else:
-                        #     batched_rewards_epit = torch.cat(reward_epit, dim=reward_batch_axis)
-                        #
-                        # n_rewards_epit = self.compute_n_selected_actions(
-                        #     selected_actions=batched_rewards_epit, axes_not_included=None)
-
-                        # running_n_rewards_ep += n_rewards_epit
-                        # running_rewards_ep += batched_rewards_epit.sum(dim=None, keepdim=False, dtype=None).item()
+                        if phase_name_p == 'training':
+                            memory.add(states=state_epit, actions=action_epit, rewards=reward_epit,
+                                       next_states=next_state_epit)
 
                         observation_epit = copy.deepcopy(next_observation_epit)
                         state_epit = [
@@ -784,78 +822,71 @@ class DQNMethods(OutputMethods):
                     running_sum_scores_ep = sum(environment[phase_name_p].get_scores(), start=running_sum_scores_ep)
                     running_sum_cum_rewards_ep = sum(cum_rewards_epi, start=running_sum_cum_rewards_ep)
 
-                    was_not_optimised = True
-                    if (phase_name_p == 'training') and (j >= min_n_episodes_for_optim):
-                        while ((replay_memory.current_len >= min_n_samples_for_optim) and
-                               (replay_memory.current_len >= batch_size_of_train) and are_more_episodes_needed):
+                    if phase_name_p == 'training':
+                        if self.is_recurrent:
+                            memory.add_episodes()
 
-                            samples_epb = replay_memory.sample()
-                            states_epb = samples_epb['states']
-                            actions_epb = samples_epb['actions']
-                            rewards_epb = samples_epb['rewards']
-                            next_states_epb = samples_epb['next_states']
+                        if j >= min_n_episodes_for_optim:
+                            while ((replay_memory.current_len >= min_n_samples_for_optim) and
+                                   (replay_memory.current_len >= batch_size_of_train) and are_more_episodes_needed):
 
-                            if self.is_recurrent:
-                                next_values_actions_epb, next_hc_epb = self.model(
-                                    x=next_states_epb[0], h=next_states_epb[1])
-                            else:
-                                next_values_actions_epb = self.model(x=next_states_epb)
+                                samples_epb = replay_memory.sample()
+                                states_epb = samples_epb['states']
+                                actions_epb = samples_epb['actions']
+                                rewards_epb = samples_epb['rewards']
+                                next_states_epb = samples_epb['next_states']
 
-                            expected_values_actions_epb = self.compute_expected_values_actions(
-                                next_values_actions=next_values_actions_epb, rewards=rewards_epb)
+                                if self.is_recurrent:
+                                    next_values_actions_epb, next_hc_epb = self.model(
+                                        x=next_states_epb[0], h=next_states_epb[1])
+                                else:
+                                    next_values_actions_epb = self.model(x=next_states_epb)
 
-                            optimizer.zero_grad()
+                                expected_values_actions_epb = self.compute_expected_values_actions(
+                                    next_values_actions=next_values_actions_epb, rewards=rewards_epb)
 
-                            # forward
-                            # track history
-                            torch.set_grad_enabled(True)
-                            self.model.unfreeze()
+                                optimizer.zero_grad()
 
-                            if self.is_recurrent:
-                                values_actions_epb, hc_epb = self.model(x=states_epb[0], h=states_epb[1])
-                            else:
-                                values_actions_epb = self.model(x=states_epb)
+                                # forward
+                                # track history
+                                torch.set_grad_enabled(True)
+                                self.model.unfreeze()
 
-                            values_selected_actions_epb = self.gather_values_selected_actions(
-                                values_actions=values_actions_epb, actions=actions_epb)
+                                if self.is_recurrent:
+                                    values_actions_epb, hc_epb = self.model(x=states_epb[0], h=states_epb[1])
+                                else:
+                                    values_actions_epb = self.model(x=states_epb)
 
-                            value_action_losses_epb = self.compute_value_action_losses(
-                                values_selected_actions=values_selected_actions_epb,
-                                expected_values_actions=expected_values_actions_epb)
+                                values_selected_actions_epb = self.gather_values_selected_actions(
+                                    values_actions=values_actions_epb, actions=actions_epb)
 
-                            scaled_value_action_loss_epb = self.reduce_value_action_losses(
-                                value_action_losses=value_action_losses_epb, axes_not_included=None,
-                                scaled=True, loss_scales_actors=None, format_scales=False)
+                                value_action_losses_epb = self.compute_value_action_losses(
+                                    values_selected_actions=values_selected_actions_epb,
+                                    expected_values_actions=expected_values_actions_epb)
 
-                            scaled_value_action_loss_epb.backward()
-                            optimizer.step()
+                                scaled_value_action_loss_epb = self.reduce_value_action_losses(
+                                    value_action_losses=value_action_losses_epb, axes_not_included=None,
+                                    scaled=True, loss_scales_actors=None, format_scales=False)
 
-                            self.model.freeze()
-                            torch.set_grad_enabled(False)
+                                scaled_value_action_loss_epb.backward()
+                                optimizer.step()
 
-                            # n_selected_actions_epb = self.compute_n_selected_actions(
-                            #     selected_actions=actions_epb, axes_not_included=None)
-                            #
-                            # n_rewards_epb = self.compute_n_selected_actions(
-                            #     selected_actions=rewards_epb, axes_not_included=None)
-                            #
-                            # running_n_selected_actions_ep += n_selected_actions_epb
-                            # running_loss_ep += (scaled_value_action_loss_epb.item() * n_selected_actions_epb)
-                            #
-                            # running_n_rewards_ep += n_rewards_epb
-                            # running_rewards_ep += rewards_epb.sum(dim=None, keepdim=False, dtype=None).item()
+                                self.model.freeze()
+                                torch.set_grad_enabled(False)
 
-                            s += replay_memory.batch_size
-                            b += 1
-                            j = 0
+                                s += replay_memory.batch_size
+                                b += 1
+                                j = 0
 
-                            are_more_episodes_needed = s < tot_observations_per_train_phase
+                                are_more_episodes_needed = s < tot_observations_per_train_phase
 
-                            was_not_optimised = False
+                                was_not_optimised = False
 
                     i += n_episodes_epi
                     if was_not_optimised:
                         j += n_episodes_epi
+                    else:
+                        was_not_optimised = True
 
                     if phase_name_p == 'training':
                         are_more_episodes_needed = s < tot_observations_per_train_phase # this line is not necessary
@@ -1024,8 +1055,9 @@ class DQNMethods(OutputMethods):
 
 class _Memory:
     def __init__(
-            self, capacity, add_timepoints_as, batch_size, state_batch_axis, is_without_state_batch_axis,
-            action_batch_axis, is_without_action_batch_axis, reward_batch_axis, is_without_reward_batch_axis):
+            self, capacity, add_timepoints_as, batch_size,
+            is_without_state_batch_axis, is_without_reward_batch_axis,
+            state_batch_axis, action_batch_axis, reward_batch_axis):
 
         """
 
@@ -1034,16 +1066,19 @@ class _Memory:
 
         :param add_timepoints_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or
             array of some batched observations
-
         :type add_timepoints_as: str
 
         :type batch_size: int
+
+        :type is_without_state_batch_axis: bool
+
+        :type is_without_reward_batch_axis: bool
 
         :type state_batch_axis: int
 
         :type action_batch_axis: int
 
-        :type reward_batch_axis: int | None
+        :type reward_batch_axis: int
         """
 
         self.states = []
@@ -1089,11 +1124,6 @@ class _Memory:
             self.is_without_state_batch_axis = is_without_state_batch_axis
         else:
             raise TypeError('is_without_state_batch_axis')
-
-        if isinstance(is_without_action_batch_axis, bool):
-            self.is_without_action_batch_axis = is_without_action_batch_axis
-        else:
-            raise TypeError('is_without_action_batch_axis')
 
         if isinstance(is_without_reward_batch_axis, bool):
             self.is_without_reward_batch_axis = is_without_reward_batch_axis
@@ -1153,32 +1183,15 @@ class TimePointMemory(_Memory):
     """A simple replay buffer."""
 
     def __init__(
-            self, capacity, add_timepoints_as, batch_size, state_batch_axis, is_without_state_batch_axis,
-            action_batch_axis, is_without_action_batch_axis, reward_batch_axis, is_without_reward_batch_axis):
-
-        """
-
-
-        :type capacity: int
-
-        :param add_timepoints_as: "s" for single observation, "l" for list or tuple of observation, "t" for tensor or
-            array of some batched observations
-        :type add_timepoints_as: str
-
-        :type batch_size: int
-
-        :type state_batch_axis: int
-
-        :type action_batch_axis: int
-
-        :type reward_batch_axis: int | None
-        """
+            self, capacity, add_timepoints_as, batch_size,
+            is_without_state_batch_axis, is_without_reward_batch_axis,
+            state_batch_axis, action_batch_axis, reward_batch_axis):
 
         _Memory.__init__(
             self=self, capacity=capacity, add_timepoints_as=add_timepoints_as, batch_size=batch_size,
-            state_batch_axis=state_batch_axis, is_without_state_batch_axis=is_without_state_batch_axis,
-            action_batch_axis=action_batch_axis, is_without_action_batch_axis=is_without_action_batch_axis,
-            reward_batch_axis=reward_batch_axis, is_without_reward_batch_axis=is_without_reward_batch_axis)
+            is_without_state_batch_axis=is_without_state_batch_axis,
+            is_without_reward_batch_axis=is_without_reward_batch_axis,
+            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
 
         if self.add_timepoints_as == 's':
             self.add = self.add_element
@@ -1191,11 +1204,11 @@ class TimePointMemory(_Memory):
 
     def clear(self):
         self.__init__(
-            capacity=self.capacity, add_timepoints_as=self.add_timepoints_as,
-            batch_size=self.batch_size, state_batch_axis=self.state_batch_axis,
+            capacity=self.capacity, add_timepoints_as=self.add_timepoints_as, batch_size=self.batch_size,
             is_without_state_batch_axis=self.is_without_state_batch_axis,
-            action_batch_axis=self.action_batch_axis, is_without_action_batch_axis=self.is_without_action_batch_axis,
-            reward_batch_axis=self.reward_batch_axis, is_without_reward_batch_axis=self.is_without_reward_batch_axis)
+            is_without_reward_batch_axis=self.is_without_reward_batch_axis,
+            state_batch_axis=self.state_batch_axis, action_batch_axis=self.action_batch_axis,
+            reward_batch_axis=self.reward_batch_axis)
         return None
 
     def get_tot_observations(self):
@@ -1212,10 +1225,11 @@ class TimePointMemory(_Memory):
                 self.states.append(states)
                 self.next_states.append(next_states)
 
-            if self.is_without_action_batch_axis:
-                self.actions.append(torch.unsqueeze(input=actions, dim=self.action_batch_axis))
-            else:
-                self.actions.append(actions)
+            # if self.is_without_action_batch_axis:
+            #     self.actions.append(torch.unsqueeze(input=actions, dim=self.action_batch_axis))
+            # else:
+            #     self.actions.append(actions)
+            self.actions.append(actions)
 
             if not isinstance(rewards, torch.Tensor):
                 rewards_f = torch.tensor(data=rewards, dtype=states.dtype, device=states.device, requires_grad=False)
@@ -1292,12 +1306,13 @@ class EpisodeMemory(_Memory):
 
     def __init__(
             self, capacity, add_timepoints_as, batch_size, time_size,
-            state_batch_axis, is_without_state_batch_axis, state_time_axis, is_without_state_time_axis,
-            action_batch_axis, is_without_action_batch_axis, action_time_axis, is_without_action_time_axis,
-            reward_batch_axis, is_without_reward_batch_axis, reward_time_axis, is_without_reward_time_axis):
+            is_without_state_batch_axis, is_without_state_time_axis,
+            is_without_reward_batch_axis, is_without_reward_time_axis,
+            state_batch_axis, state_time_axis,
+            action_batch_axis, action_time_axis,
+            reward_batch_axis, reward_time_axis):
 
         """
-
 
         :type capacity: int
 
@@ -1307,18 +1322,34 @@ class EpisodeMemory(_Memory):
 
         :type batch_size: int
 
+        :type time_size: int
+
+        :type is_without_state_batch_axis: bool
+
+        :type is_without_state_time_axis: bool
+
+        :type is_without_reward_batch_axis: bool
+
+        :type is_without_reward_time_axis: bool
+
         :type state_batch_axis: int
+
+        :type state_time_axis: int
 
         :type action_batch_axis: int
 
-        :type reward_batch_axis: int | None
+        :type action_time_axis: int
+
+        :type reward_batch_axis: int
+
+        :type reward_time_axis: int
         """
 
         _Memory.__init__(
             self=self, capacity=capacity, add_timepoints_as=add_timepoints_as, batch_size=batch_size,
-            state_batch_axis=state_batch_axis, is_without_state_batch_axis=is_without_state_batch_axis,
-            action_batch_axis=action_batch_axis, is_without_action_batch_axis=is_without_action_batch_axis,
-            reward_batch_axis=reward_batch_axis, is_without_reward_batch_axis=is_without_reward_batch_axis)
+            is_without_state_batch_axis=is_without_state_batch_axis,
+            is_without_reward_batch_axis=is_without_reward_batch_axis,
+            state_batch_axis=state_batch_axis, action_batch_axis=action_batch_axis, reward_batch_axis=reward_batch_axis)
 
         self.n_agents = None
         self.tmp_states = None
@@ -1351,11 +1382,6 @@ class EpisodeMemory(_Memory):
         else:
             raise TypeError('is_without_state_time_axis')
 
-        if isinstance(is_without_action_time_axis, bool):
-            self.is_without_action_time_axis = is_without_action_time_axis
-        else:
-            raise TypeError('is_without_action_time_axis')
-
         if isinstance(is_without_reward_time_axis, bool):
             self.is_without_reward_time_axis = is_without_reward_time_axis
         else:
@@ -1387,16 +1413,15 @@ class EpisodeMemory(_Memory):
     def clear(self):
 
         self.__init__(
-            capacity=self.capacity, add_timepoints_as=self.add_timepoints_as, batch_size=self.batch_size,
-            time_size=self.time_size, state_batch_axis=self.state_batch_axis, state_time_axis=self.state_time_axis,
-            action_batch_axis=self.action_batch_axis, action_time_axis=self.action_time_axis,
-            reward_batch_axis=self.reward_batch_axis, reward_time_axis=self.reward_time_axis,
+            capacity=self.capacity, add_timepoints_as=self.add_timepoints_as,
+            batch_size=self.batch_size, time_size=self.time_size,
             is_without_state_batch_axis=self.is_without_state_batch_axis,
             is_without_state_time_axis=self.is_without_state_time_axis,
-            is_without_action_batch_axis=self.is_without_action_batch_axis,
-            is_without_action_time_axis=self.is_without_action_time_axis,
             is_without_reward_batch_axis=self.is_without_reward_batch_axis,
-            is_without_reward_time_axis=self.is_without_reward_time_axis)
+            is_without_reward_time_axis=self.is_without_reward_time_axis,
+            state_batch_axis=self.state_batch_axis, state_time_axis=self.state_time_axis,
+            action_batch_axis=self.action_batch_axis, action_time_axis=self.action_time_axis,
+            reward_batch_axis=self.reward_batch_axis, reward_time_axis=self.reward_time_axis)
 
         return None
 
@@ -1468,16 +1493,17 @@ class EpisodeMemory(_Memory):
                     else:
                         next_states_f = next_states
 
-            if self.is_without_action_batch_axis:
-                if self.is_without_action_time_axis:
-                    actions_f = cp_unsqueeze(data=actions, dims=self.sorted_action_bt_axes, sort=False)
-                else:
-                    actions_f = torch.unsqueeze(input=actions, dim=self.action_batch_axis)
-            else:
-                if self.is_without_action_time_axis:
-                    actions_f = torch.unsqueeze(input=actions, dim=self.action_time_axis)
-                else:
-                    actions_f = actions
+            # if self.is_without_action_batch_axis:
+            #     if self.is_without_action_time_axis:
+            #         actions_f = cp_unsqueeze(data=actions, dims=self.sorted_action_bt_axes, sort=False)
+            #     else:
+            #         actions_f = torch.unsqueeze(input=actions, dim=self.action_batch_axis)
+            # else:
+            #     if self.is_without_action_time_axis:
+            #         actions_f = torch.unsqueeze(input=actions, dim=self.action_time_axis)
+            #     else:
+            #         actions_f = actions
+            actions_f = actions
 
             if not isinstance(rewards, torch.Tensor):
                 rewards_f = torch.tensor(
@@ -1669,7 +1695,7 @@ class EpisodeMemory(_Memory):
 
             cum_time_points = 0
             i = 0
-            while (n_extras > cum_time_points) and (i < tot_episodes_minus_one):
+            while (n_extras > cum_time_points) and ((tot_episodes_minus_one - i) > self.batch_size):
                 cum_time_points += self.states[i].shape[self.state_time_axis]
                 i += 1
 
@@ -1728,9 +1754,9 @@ class EpisodeMemory(_Memory):
         for i in range(0, self.batch_size, 1):
 
             if time_lengths_b[i] == self.states[ep_indexes[i]].shape[self.state_time_axis]:
-                print('correct')
+                print('time_lengths_b[i] correct')
             else:
-                print('wrong')
+                raise ValueError('time_lengths_b[i] wrong')
 
             start_time_idx_i = np.random.randint(
                 low=0, high=time_lengths_b[i] - time_size_b, size=None, dtype='i').tolist()
