@@ -464,7 +464,7 @@ class DQNMethods(OutputMethods):
 
         :type n_episodes_per_val_phase: int
 
-        :type T_val: int
+        :type T_val: int | float | None
 
         :type directory_outputs: str | None
         """
@@ -681,11 +681,7 @@ class DQNMethods(OutputMethods):
                         if phase_name_p == 'training':
                             memory.init_episode_vars(n_agents=environment[phase_name_p].n_agents)
 
-                        hc_epit = [
-                            None if observation_epit[a] is None else self.model.init_h(
-                                batch_shape=self.model.get_batch_shape_from_input_shape(
-                                    input_shape=observation_epit[a].shape))
-                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
+                        hc_epit = [None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list | None
 
                         values_actions_epit = [
                             None for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
@@ -803,9 +799,7 @@ class DQNMethods(OutputMethods):
                                        next_states=next_state_epit)
 
                         observation_epit = copy.deepcopy(next_observation_epit)
-                        state_epit = [
-                            None if observation_epit[a] is None else copy.deepcopy(next_state_epit[a])
-                            for a in range(0, environment[phase_name_p].n_agents, 1)]  # type: list
+                        state_epit = copy.deepcopy(observation_epit)
 
                         values_actions_epit = [
                             None if state_epit[a] is None else copy.deepcopy(next_values_actions_epit[a])
@@ -845,8 +839,7 @@ class DQNMethods(OutputMethods):
                             next_states_epb = samples_epb['next_states']
 
                             if self.is_recurrent:
-                                next_values_actions_epb, next_hc_epb = self.model(
-                                    x=next_states_epb[0], h=next_states_epb[1])
+                                next_values_actions_epb, next_hc_epb = self.model(x=next_states_epb, h=None)
                             else:
                                 next_values_actions_epb = self.model(x=next_states_epb)
 
@@ -861,7 +854,7 @@ class DQNMethods(OutputMethods):
                             self.model.unfreeze()
 
                             if self.is_recurrent:
-                                values_actions_epb, hc_epb = self.model(x=states_epb[0], h=states_epb[1])
+                                values_actions_epb, hc_epb = self.model(x=states_epb, h=None)
                             else:
                                 values_actions_epb = self.model(x=states_epb)
 
@@ -1115,7 +1108,7 @@ class _Memory:
 
         if isinstance(add_timepoints_as, str):
             self.add_timepoints_as = add_timepoints_as.lower()
-            if self.add_timepoints_as == 'slt':
+            if self.add_timepoints_as in 'slt':
                 pass
             else:
                 raise ValueError('add_timepoints_as')
@@ -1131,6 +1124,8 @@ class _Memory:
             self.is_without_reward_batch_axis = is_without_reward_batch_axis
         else:
             raise TypeError('is_without_reward_batch_axis')
+
+        self.rng = np.random.default_rng()
 
         self.current_len = 0
 
@@ -1223,7 +1218,10 @@ class TimePointMemory(_Memory):
 
             if self.is_without_state_batch_axis:
                 self.states.append(torch.unsqueeze(input=states, dim=self.state_batch_axis))
-                self.next_states.append(torch.unsqueeze(input=next_states, dim=self.state_batch_axis))
+                if next_states is None:
+                    self.next_states.append(None)
+                else:
+                    self.next_states.append(torch.unsqueeze(input=next_states, dim=self.state_batch_axis))
             else:
                 self.states.append(states)
                 self.next_states.append(next_states)
@@ -1274,8 +1272,13 @@ class TimePointMemory(_Memory):
 
     def sample(self):
 
-        if self.batch_size > self.current_len:
-            raise ValueError('self.batch_size > self.current_len')
+        tot_time_points = self.get_tot_observations()
+
+        if self.batch_size > tot_time_points:
+            raise ValueError('self.batch_size > tot_time_points')
+
+        indexes = self.rng.choice(
+            a=tot_time_points, size=tuple([self.batch_size]), replace=False, p=None, axis=0, shuffle=True)
 
         states = []
         actions = []
@@ -1283,13 +1286,12 @@ class TimePointMemory(_Memory):
         next_states = []
         for i in range(0, self.batch_size, 1):
 
-            index = np.random.randint(low=0, high=self.current_len, size=None, dtype='i').tolist()
+            states.append(self.states[indexes[i]])
+            actions.append(self.actions[indexes[i]])
+            rewards.append(self.rewards[indexes[i]])
+            next_states.append(self.next_states[indexes[i]])
 
-            states.append(self.states[index])
-            actions.append(self.actions[index])
-            rewards.append(self.rewards[index])
-            next_states.append(self.next_states[index])
-
+            # index = np.random.randint(low=0, high=self.current_len, size=None, dtype='i').tolist()
             # states.append(self.states.pop(index))
             # actions.append(self.actions.pop(index))
             # rewards.append(self.rewards.pop(index))
@@ -1415,8 +1417,6 @@ class EpisodeMemory(_Memory):
         else:
             raise ValueError('add_timepoints_as')
 
-        self.rng = np.random.default_rng()
-
     def clear(self):
 
         self.__init__(
@@ -1520,14 +1520,12 @@ class EpisodeMemory(_Memory):
 
             if self.is_without_reward_batch_axis:
                 if self.is_without_reward_time_axis:
-                    rewards_f = cp_unsqueeze(data=rewards, dims=self.sorted_reward_bt_axes, sort=False)
+                    rewards_f = cp_unsqueeze(data=rewards_f, dims=self.sorted_reward_bt_axes, sort=False)
                 else:
-                    rewards_f = torch.unsqueeze(input=rewards, dim=self.reward_batch_axis)
+                    rewards_f = torch.unsqueeze(input=rewards_f, dim=self.reward_batch_axis)
             else:
                 if self.is_without_reward_time_axis:
-                    rewards_f = torch.unsqueeze(input=rewards, dim=self.reward_time_axis)
-                else:
-                    rewards_f = rewards
+                    rewards_f = torch.unsqueeze(input=rewards_f, dim=self.reward_time_axis)
 
             if self.add_timepoints_as == 's':
                 self.tmp_states.append(states_f)
@@ -1765,21 +1763,25 @@ class EpisodeMemory(_Memory):
             else:
                 raise ValueError('time_lengths_b[i] wrong')
 
-            start_time_idx_i = np.random.randint(
-                low=0, high=time_lengths_b[i] - time_size_b, size=None, dtype='i').tolist()
-            # end_idx = start_idx + time_size_b
+            if time_lengths_b[i] == time_size_b:
+                start_time_idx_i = 0
+                end_time_idx_i = time_size_b
+            else:
+                start_time_idx_i = np.random.randint(
+                    low=0, high=time_lengths_b[i] - time_size_b + 1, size=None, dtype='i').item()
+                end_time_idx_i = start_time_idx_i + time_size_b
 
             state_indexes_i = tuple([
-                slice(start_time_idx_i, start_time_idx_i + time_size_b, 1) if d == self.state_time_axis else
+                slice(start_time_idx_i, end_time_idx_i, 1) if d == self.state_time_axis else
                 slice(0, self.states[ep_indexes[i]].shape[d], 1) for d in range(0, self.states[ep_indexes[i]].ndim, 1)])
 
             action_indexes_i = tuple([
-                slice(start_time_idx_i, start_time_idx_i + time_size_b, 1) if d == self.action_time_axis else
+                slice(start_time_idx_i, end_time_idx_i, 1) if d == self.action_time_axis else
                 slice(0, self.actions[ep_indexes[i]].shape[d], 1)
                 for d in range(0, self.actions[ep_indexes[i]].ndim, 1)])
 
             reward_indexes_i = tuple([
-                slice(start_time_idx_i, start_time_idx_i + time_size_b, 1) if d == self.reward_time_axis else
+                slice(start_time_idx_i, end_time_idx_i, 1) if d == self.reward_time_axis else
                 slice(0, self.rewards[ep_indexes[i]].shape[d], 1)
                 for d in range(0, self.rewards[ep_indexes[i]].ndim, 1)])
 
@@ -1873,13 +1875,3 @@ class TimedDQNMethods(DQNMethods, TimedOutputMethods):
                 values_actions_out[a] = values_actions[a][tuple_indexes_a]
 
         return values_actions_out
-
-
-# todo:
-# remove_extras() in the recurrent memory
-# sample()  in the recurrent memory
-# add time axis in the environment
-# add batch axis in the rewards in the environment
-
-# end indexes in the recurrent memory
-# start indexes in the recurrent memory
