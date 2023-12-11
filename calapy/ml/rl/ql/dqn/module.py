@@ -1278,7 +1278,7 @@ class TimePointMemory(_Memory):
             raise ValueError('self.batch_size > tot_time_points')
 
         indexes = self.rng.choice(
-            a=tot_time_points, size=tuple([self.batch_size]), replace=False, p=None, axis=0, shuffle=True)
+            a=tot_time_points, size=tuple([self.batch_size]), replace=False, p=None, axis=0, shuffle=True).tolist()
 
         states = []
         actions = []
@@ -1745,11 +1745,13 @@ class EpisodeMemory(_Memory):
 
         # ep_indexes = np.random.permutation(x=tot_episodes).tolist()
         # ep_indexes = np.random.randint(low=0, high=tot_episodes, size=tuple([self.batch_size]), dtype='i').tolist()
+        # ep_indexes = sorted(self.rng.choice(
+        #     a=tot_episodes, size=tuple([self.batch_size]), replace=False, p=None, axis=0, shuffle=True).tolist())
         ep_indexes = self.rng.choice(
             a=tot_episodes, size=tuple([self.batch_size]), replace=False, p=None, axis=0, shuffle=True)
 
-        time_lengths_b = [self.states[ep_indexes[i]].shape[self.state_time_axis] for i in range(0, self.batch_size, 1)]
-        min_time_lengths_b = min(time_lengths_b)
+        min_time_lengths_b = min(
+            [self.states[ep_indexes[i]].shape[self.state_time_axis] for i in range(0, self.batch_size, 1)])
         time_size_b = min(min_time_lengths_b, self.time_size)
 
         states = []
@@ -1758,38 +1760,38 @@ class EpisodeMemory(_Memory):
         next_states = []
         for i in range(0, self.batch_size, 1):
 
-            if time_lengths_b[i] == self.states[ep_indexes[i]].shape[self.state_time_axis]:
-                print('time_lengths_b[i] correct')
-            else:
-                raise ValueError('time_lengths_b[i] wrong')
+            time_length_bi = self.states[ep_indexes[i]].shape[self.state_time_axis]
 
-            if time_lengths_b[i] == time_size_b:
-                start_time_idx_i = 0
-                end_time_idx_i = time_size_b
-            else:
+            if time_length_bi == time_size_b:
+                states.append(self.states[ep_indexes[i]])
+                actions.append(self.actions[ep_indexes[i]])
+                rewards.append(self.rewards[ep_indexes[i]])
+                next_states.append(self.next_states[ep_indexes[i]])
+            elif time_length_bi > time_size_b:
                 start_time_idx_i = np.random.randint(
-                    low=0, high=time_lengths_b[i] - time_size_b + 1, size=None, dtype='i').item()
+                    low=0, high=time_length_bi - time_size_b + 1, size=None, dtype='i').item()
                 end_time_idx_i = start_time_idx_i + time_size_b
 
-            state_indexes_i = tuple([
-                slice(start_time_idx_i, end_time_idx_i, 1) if d == self.state_time_axis else
-                slice(0, self.states[ep_indexes[i]].shape[d], 1) for d in range(0, self.states[ep_indexes[i]].ndim, 1)])
+                state_indexes_i = tuple([
+                    slice(start_time_idx_i, end_time_idx_i, 1) if d == self.state_time_axis else
+                    slice(0, self.states[ep_indexes[i]].shape[d], 1) for d in range(0, self.states[ep_indexes[i]].ndim, 1)])
 
-            action_indexes_i = tuple([
-                slice(start_time_idx_i, end_time_idx_i, 1) if d == self.action_time_axis else
-                slice(0, self.actions[ep_indexes[i]].shape[d], 1)
-                for d in range(0, self.actions[ep_indexes[i]].ndim, 1)])
+                action_indexes_i = tuple([
+                    slice(start_time_idx_i, end_time_idx_i, 1) if d == self.action_time_axis else
+                    slice(0, self.actions[ep_indexes[i]].shape[d], 1)
+                    for d in range(0, self.actions[ep_indexes[i]].ndim, 1)])
 
-            reward_indexes_i = tuple([
-                slice(start_time_idx_i, end_time_idx_i, 1) if d == self.reward_time_axis else
-                slice(0, self.rewards[ep_indexes[i]].shape[d], 1)
-                for d in range(0, self.rewards[ep_indexes[i]].ndim, 1)])
+                reward_indexes_i = tuple([
+                    slice(start_time_idx_i, end_time_idx_i, 1) if d == self.reward_time_axis else
+                    slice(0, self.rewards[ep_indexes[i]].shape[d], 1)
+                    for d in range(0, self.rewards[ep_indexes[i]].ndim, 1)])
 
-            states.append(self.states[ep_indexes[i]][state_indexes_i])
-            actions.append(self.actions[ep_indexes[i]][action_indexes_i])
-            rewards.append(self.rewards[ep_indexes[i]][reward_indexes_i])
-            next_states.append(self.next_states[ep_indexes[i]][state_indexes_i])
-
+                states.append(self.states[ep_indexes[i]][state_indexes_i])
+                actions.append(self.actions[ep_indexes[i]][action_indexes_i])
+                rewards.append(self.rewards[ep_indexes[i]][reward_indexes_i])
+                next_states.append(self.next_states[ep_indexes[i]][state_indexes_i])
+            else:
+                raise ValueError('time_length_bi < time_size_b')
 
             # states.append(self.states.pop(ep_indexes[i]))
             # actions.append(self.actions.pop(ep_indexes[i]))
