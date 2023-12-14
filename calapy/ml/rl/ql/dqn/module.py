@@ -3,6 +3,7 @@
 import os
 import copy
 import math
+import random
 import torch
 import numpy as np
 from ..... import clock as cp_clock
@@ -409,7 +410,7 @@ class DQNMethods(OutputMethods):
             state_batch_axis, state_time_axis, action_batch_axis, action_time_axis, reward_batch_axis, reward_time_axis,
             U=10, E=None, n_batches_per_train_phase=100, batch_size_of_train=100, time_size=10, T_train=None,
             epsilon_start=.95, epsilon_end=.01, epsilon_step=-.05,  capacity=100000,
-            min_n_episodes_for_optim=2, min_n_samples_for_optim=1000,
+            min_n_episodes_for_optim=2, min_n_samples_for_optim=1000, prob_last=0.0,
             n_episodes_per_val_phase=1000, T_val=None, directory_outputs=None):
 
         """
@@ -586,7 +587,8 @@ class DQNMethods(OutputMethods):
                 is_without_reward_time_axis=is_without_reward_time_axis,
                 state_batch_axis=state_batch_axis, state_time_axis=state_time_axis,
                 action_batch_axis=action_batch_axis, action_time_axis=action_time_axis,
-                reward_batch_axis=reward_batch_axis, reward_time_axis=reward_time_axis)
+                reward_batch_axis=reward_batch_axis, reward_time_axis=reward_time_axis,
+                prob_last=prob_last)
 
             sorted_state_bt_axes = memory.sorted_state_bt_axes
         else:
@@ -1319,7 +1321,8 @@ class EpisodeMemory(_Memory):
             is_without_reward_batch_axis, is_without_reward_time_axis,
             state_batch_axis, state_time_axis,
             action_batch_axis, action_time_axis,
-            reward_batch_axis, reward_time_axis):
+            reward_batch_axis, reward_time_axis,
+            prob_last=0.0):
 
         """
 
@@ -1352,6 +1355,8 @@ class EpisodeMemory(_Memory):
         :type reward_batch_axis: int
 
         :type reward_time_axis: int
+
+        :type prob_last: float | int | None
         """
 
         _Memory.__init__(
@@ -1395,6 +1400,20 @@ class EpisodeMemory(_Memory):
             self.is_without_reward_time_axis = is_without_reward_time_axis
         else:
             raise TypeError('is_without_reward_time_axis')
+
+        if prob_last is None:
+            self.prob_last = 0.0
+        elif isinstance(prob_last, float):
+            self.prob_last = prob_last
+        elif isinstance(prob_last, int):
+            self.prob_last = float(prob_last)
+        else:
+            raise TypeError('prob_last')
+
+        if (self.prob_last < 0.0) or (self.prob_last > 1.0):
+            raise ValueError('prob_last')
+
+        self.is_prob_last_greater_than_0 = self.prob_last > 0.0
 
         if self.state_batch_axis < self.state_time_axis:
             self.is_batch_axis_first = True
@@ -1561,55 +1580,11 @@ class EpisodeMemory(_Memory):
             new_rewards = torch.cat(self.tmp_rewards, dim=self.reward_time_axis)
             new_next_states = torch.cat(self.tmp_next_states, dim=self.state_time_axis)
 
-            if new_states.shape[self.state_time_axis] > self.time_size:
-
-                first_state_indexes = tuple([
-                    slice(0, self.time_size, 1) if d == self.state_time_axis else
-                    slice(0, new_states.shape[d], 1) for d in range(0, new_states.ndim, 1)])
-
-                last_state_indexes = tuple([
-                    slice(new_states.shape[d] - self.time_size, new_states.shape[d], 1)
-                    if d == self.state_time_axis else
-                    slice(0, new_states.shape[d], 1) for d in range(0, new_states.ndim, 1)])
-
-                first_action_indexes = tuple([
-                    slice(0, self.time_size, 1) if d == self.action_time_axis else
-                    slice(0, new_actions.shape[d], 1) for d in range(0, new_actions.ndim, 1)])
-
-                last_action_indexes = tuple([
-                    slice(new_actions.shape[d] - self.time_size, new_actions.shape[d], 1)
-                    if d == self.action_time_axis else
-                    slice(0, new_actions.shape[d], 1) for d in range(0, new_actions.ndim, 1)])
-
-                first_reward_indexes = tuple([
-                    slice(0, self.time_size, 1) if d == self.reward_time_axis else
-                    slice(0, new_rewards.shape[d], 1) for d in range(0, new_rewards.ndim, 1)])
-
-                last_reward_indexes = tuple([
-                    slice(new_rewards.shape[d] - self.time_size, new_rewards.shape[d], 1)
-                    if d == self.reward_time_axis else
-                    slice(0, new_rewards.shape[d], 1) for d in range(0, new_rewards.ndim, 1)])
-
-                new_states = [new_states, new_states[first_state_indexes], new_states[last_state_indexes]]
-
-                new_actions = [new_actions, new_actions[first_action_indexes], new_actions[last_action_indexes]]
-
-                new_rewards = [new_rewards, new_rewards[first_reward_indexes], new_rewards[last_reward_indexes]]
-
-                new_next_states = [
-                    new_next_states, new_next_states[first_state_indexes], new_next_states[last_state_indexes]]
-
-                # add
-                self.states += new_states
-                self.actions += new_actions
-                self.rewards += new_rewards
-                self.next_states += new_next_states
-            else:
-                # add
-                self.states.append(new_states)
-                self.actions.append(new_actions)
-                self.rewards.append(new_rewards)
-                self.next_states.append(new_next_states)
+            # add
+            self.states.append(new_states)
+            self.actions.append(new_actions)
+            self.rewards.append(new_rewards)
+            self.next_states.append(new_next_states)
         else:
             # concatenate
             new_states = [
@@ -1620,60 +1595,6 @@ class EpisodeMemory(_Memory):
                 torch.cat(self.tmp_rewards[a], dim=self.reward_time_axis) for a in range(0, self.n_agents, 1)]
             new_next_states = [
                 torch.cat(self.tmp_next_states[a], dim=self.state_time_axis) for a in range(0, self.n_agents, 1)]
-
-            first_new_states = []
-            first_new_actions = []
-            first_new_rewards = []
-            first_new_next_states = []
-
-            last_new_states = []
-            last_new_actions = []
-            last_new_rewards = []
-            last_new_next_states = []
-            for a in range(0, self.n_agents, 1):
-
-                if new_states[a].shape[self.state_time_axis] > self.time_size:
-                    first_state_indexes_a = tuple([
-                        slice(0, self.time_size, 1) if d == self.state_time_axis else
-                        slice(0, new_states[a].shape[d], 1) for d in range(0, new_states[a].ndim, 1)])
-
-                    last_state_indexes_a = tuple([
-                        slice(new_states[a].shape[d] - self.time_size, new_states[a].shape[d], 1)
-                        if d == self.state_time_axis else
-                        slice(0, new_states[a].shape[d], 1) for d in range(0, new_states[a].ndim, 1)])
-
-                    first_action_indexes_a = tuple([
-                        slice(0, self.time_size, 1) if d == self.action_time_axis else
-                        slice(0, new_actions[a].shape[d], 1) for d in range(0, new_actions[a].ndim, 1)])
-
-                    last_action_indexes_a = tuple([
-                        slice(new_actions[a].shape[d] - self.time_size, new_actions[a].shape[d], 1)
-                        if d == self.action_time_axis else
-                        slice(0, new_actions[a].shape[d], 1) for d in range(0, new_actions[a].ndim, 1)])
-
-                    first_reward_indexes_a = tuple([
-                        slice(0, self.time_size, 1) if d == self.reward_time_axis else
-                        slice(0, new_rewards[a].shape[d], 1) for d in range(0, new_rewards[a].ndim, 1)])
-
-                    last_reward_indexes_a = tuple([
-                        slice(new_rewards[a].shape[d] - self.time_size, new_rewards[a].shape[d], 1)
-                        if d == self.reward_time_axis else
-                        slice(0, new_rewards[a].shape[d], 1) for d in range(0, new_rewards[a].ndim, 1)])
-
-                    first_new_states.append(new_states[a][first_state_indexes_a])
-                    first_new_actions.append(new_actions[a][first_action_indexes_a])
-                    first_new_rewards.append(new_rewards[a][first_reward_indexes_a])
-                    first_new_next_states.append(new_next_states[a][first_state_indexes_a])
-
-                    last_new_states.append(new_states[a][last_state_indexes_a])
-                    last_new_actions.append(new_actions[a][last_action_indexes_a])
-                    last_new_rewards.append(new_rewards[a][last_reward_indexes_a])
-                    last_new_next_states.append(new_next_states[a][last_state_indexes_a])
-
-            new_states = new_states + first_new_states + last_new_states
-            new_actions = new_actions + first_new_actions + last_new_actions
-            new_rewards = new_rewards + first_new_rewards + last_new_rewards
-            new_next_states = new_next_states + first_new_next_states + last_new_next_states
 
             # add
             self.states += new_states
@@ -1767,10 +1688,16 @@ class EpisodeMemory(_Memory):
                 actions.append(self.actions[ep_indexes[i]])
                 rewards.append(self.rewards[ep_indexes[i]])
                 next_states.append(self.next_states[ep_indexes[i]])
+
             elif time_length_bi > time_size_b:
-                start_time_idx_i = np.random.randint(
-                    low=0, high=time_length_bi - time_size_b + 1, size=None, dtype='i').item()
-                end_time_idx_i = start_time_idx_i + time_size_b
+
+                if self.is_prob_last_greater_than_0 and (random.random() < self.prob_last):
+                    end_time_idx_i = time_length_bi
+                    start_time_idx_i = end_time_idx_i - time_size_b
+                else:
+                    start_time_idx_i = np.random.randint(
+                        low=0, high=time_length_bi - time_size_b + 1, size=None, dtype='i').item()
+                    end_time_idx_i = start_time_idx_i + time_size_b
 
                 state_indexes_i = tuple([
                     slice(start_time_idx_i, end_time_idx_i, 1) if d == self.state_time_axis else
