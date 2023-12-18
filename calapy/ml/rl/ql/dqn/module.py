@@ -496,6 +496,8 @@ class DQNMethods(OutputMethods):
             raise TypeError('batch_size_of_train')
 
         tot_observations_per_train_phase = n_batches_per_train_phase * batch_size_of_train
+        if self.is_recurrent:
+            tot_observations_per_train_phase *= time_size
 
         T = {'training': T_train, 'validation': T_val}
         if T['training'] is None:
