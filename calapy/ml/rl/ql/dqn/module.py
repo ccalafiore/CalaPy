@@ -826,15 +826,17 @@ class DQNMethods(OutputMethods):
                             memory_tot_episodes = memory.get_tot_episodes()
                             memory_tot_time_points = memory.get_tot_observations()
                             memory_has_enough_samples_for_optim = (
+                                    (memory_tot_episodes >= min_n_episodes_for_optim) and
                                     (memory_tot_time_points >= min_n_samples_for_optim) and
                                     (memory_tot_episodes >= batch_size_of_train))
                         else:
                             memory_tot_time_points = memory.get_tot_observations()
                             memory_has_enough_samples_for_optim = (
+                                    (j >= min_n_episodes_for_optim) and
                                     (memory_tot_time_points >= min_n_samples_for_optim) and
                                     (memory_tot_time_points >= batch_size_of_train))
 
-                        if (j >= min_n_episodes_for_optim) and memory_has_enough_samples_for_optim:
+                        if memory_has_enough_samples_for_optim:
 
                             samples_epb = memory.sample()
                             states_epb = samples_epb['states']
@@ -1614,7 +1616,8 @@ class EpisodeMemory(_Memory):
 
     def remove_extras(self):
 
-        n_extras = len(self) - self.capacity
+        self.current_len = len(self)
+        n_extras = self.current_len - self.capacity
 
         if n_extras > 0:
 
@@ -1635,27 +1638,29 @@ class EpisodeMemory(_Memory):
                 self.actions = self.actions[slice(i, tot_episodes, 1)]
                 self.rewards = self.rewards[slice(i, tot_episodes, 1)]
                 self.next_states = self.next_states[slice(i, tot_episodes, 1)]
-                n_extras = len(self) - self.capacity
-
-            if n_extras > 0:
-                state_indexes_0 = tuple([
-                    slice(n_extras, self.states[0].shape[d], 1) if d == self.state_time_axis else
-                    slice(0, self.states[0].shape[d], 1) for d in range(0, self.states[0].ndim, 1)])
-
-                action_indexes_0 = tuple([
-                    slice(n_extras, self.actions[0].shape[d], 1) if d == self.action_time_axis else
-                    slice(0, self.actions[0].shape[d], 1) for d in range(0, self.actions[0].ndim, 1)])
-
-                reward_indexes_0 = tuple([
-                    slice(n_extras, self.rewards[0].shape[d], 1) if d == self.reward_time_axis else
-                    slice(0, self.rewards[0].shape[d], 1) for d in range(0, self.rewards[0].ndim, 1)])
-
-                self.states[0] = self.states[0][state_indexes_0]
-                self.actions[0] = self.actions[0][action_indexes_0]
-                self.rewards[0] = self.rewards[0][reward_indexes_0]
-                self.next_states[0] = self.next_states[0][state_indexes_0]
 
                 self.current_len = len(self)
+                n_extras = self.current_len - self.capacity
+
+            # if n_extras > 0:
+            #     state_indexes_0 = tuple([
+            #         slice(n_extras, self.states[0].shape[d], 1) if d == self.state_time_axis else
+            #         slice(0, self.states[0].shape[d], 1) for d in range(0, self.states[0].ndim, 1)])
+            #
+            #     action_indexes_0 = tuple([
+            #         slice(n_extras, self.actions[0].shape[d], 1) if d == self.action_time_axis else
+            #         slice(0, self.actions[0].shape[d], 1) for d in range(0, self.actions[0].ndim, 1)])
+            #
+            #     reward_indexes_0 = tuple([
+            #         slice(n_extras, self.rewards[0].shape[d], 1) if d == self.reward_time_axis else
+            #         slice(0, self.rewards[0].shape[d], 1) for d in range(0, self.rewards[0].ndim, 1)])
+            #
+            #     self.states[0] = self.states[0][state_indexes_0]
+            #     self.actions[0] = self.actions[0][action_indexes_0]
+            #     self.rewards[0] = self.rewards[0][reward_indexes_0]
+            #     self.next_states[0] = self.next_states[0][state_indexes_0]
+            #
+            #     self.current_len = len(self)
 
         return None
 
