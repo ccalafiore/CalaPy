@@ -1640,8 +1640,8 @@ class EpisodeMemory(_Memory):
                 self.next_states = self.next_states[slice(i, tot_episodes, 1)]
 
                 self.current_len = len(self)
-                n_extras = self.current_len - self.capacity
-
+            #     n_extras = self.current_len - self.capacity
+            #
             # if n_extras > 0:
             #     state_indexes_0 = tuple([
             #         slice(n_extras, self.states[0].shape[d], 1) if d == self.state_time_axis else
