@@ -214,7 +214,7 @@ def csv_file_to_array(
     else:
         keeping_columns = columns
 
-    exclude_rows = lambda x: x not in keeping_rows
+    exclude_rows = None if keeping_rows is None else lambda x: x not in keeping_rows
     table = pd.read_csv(
         filename,
         skiprows=exclude_rows, usecols=keeping_columns,

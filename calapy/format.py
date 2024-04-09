@@ -71,48 +71,57 @@ def format_shape_arguments(dict_arguments, target_shape):
               isinstance(argument_i, np.ndarray) or
               isinstance(argument_i, tuple)):
 
+            is_formatted = False
             if isinstance(argument_i, list) or isinstance(argument_i, tuple):
-                # argument_i = np.asarray(argument_i)
-                argument_i = np.asarray(argument_i)
+                try:
+                    argument_i = np.asarray(argument_i)
+                except ValueError:
+                    index = tuple([slice(0, target_shape[a], 1) for a in range(0, n_axes, 1)])
+                    tmp_argument_i = np.empty(shape=target_shape, dtype='O')
+                    tmp_argument_i[index] = argument_i
+                    argument_i = tmp_argument_i
+                    del tmp_argument_i
+                    is_formatted = True
 
-            shape_argument_i = np.asarray(argument_i.shape, dtype=int)
-            shape_in_argument_i = shape_argument_i[slice(0, n_axes, 1)]
-            n_axis_in_argument_i = shape_in_argument_i.size
-            if n_axis_in_argument_i != n_axes:
-                shape_new_argument_i = np.append(target_shape, shape_argument_i)
-                n_axis_in_new_argument_i = shape_new_argument_i.size
-                dtype = argument_i.dtype
-                argument_i_tmp = argument_i
-                for a in range(n_axes):
-                    argument_i_tmp = np.expand_dims(argument_i_tmp, axis=0)
-                argument_i = np.empty(shape_new_argument_i, dtype=dtype)
-                index = np.empty(n_axis_in_new_argument_i, dtype=object)
-                index[:] = slice(None)
-                argument_i[tuple(index)] = argument_i_tmp
+            if not is_formatted:
+                shape_argument_i = np.asarray(argument_i.shape, dtype=int)
+                shape_in_argument_i = shape_argument_i[slice(0, n_axes, 1)]
+                n_axis_in_argument_i = shape_in_argument_i.size
+                if n_axis_in_argument_i != n_axes:
+                    shape_new_argument_i = np.append(target_shape, shape_argument_i)
+                    n_axis_in_new_argument_i = shape_new_argument_i.size
+                    dtype = argument_i.dtype
+                    argument_i_tmp = argument_i
+                    for a in range(n_axes):
+                        argument_i_tmp = np.expand_dims(argument_i_tmp, axis=0)
+                    argument_i = np.empty(shape_new_argument_i, dtype=dtype)
+                    index = np.empty(n_axis_in_new_argument_i, dtype=object)
+                    index[:] = slice(None)
+                    argument_i[tuple(index)] = argument_i_tmp
 
-            elif (shape_in_argument_i == target_shape).all():
-                pass
-            elif (shape_in_argument_i[shape_in_argument_i != target_shape] == 1).all():
-                shape_argument_i = shape_argument_i[slice(n_axes, None, 1)]
-                shape_new_argument_i = np.append(target_shape, shape_argument_i)
-                n_axis_in_new_argument_i = shape_new_argument_i.size
-                dtype = argument_i.dtype
-                argument_i_tmp = argument_i
-                argument_i = np.empty(shape_new_argument_i, dtype=dtype)
-                index = np.empty(n_axis_in_new_argument_i, dtype=object)
-                index[:] = slice(None)
-                argument_i[tuple(index)] = argument_i_tmp[tuple(index)]
-            else:
-                shape_new_argument_i = np.append(target_shape, shape_argument_i)
-                n_axis_in_new_argument_i = shape_new_argument_i.size
-                dtype = argument_i.dtype
-                argument_i_tmp = argument_i
-                for a in range(n_axes):
-                    argument_i_tmp = np.expand_dims(argument_i_tmp, axis=0)
-                argument_i = np.empty(shape_new_argument_i, dtype=dtype)
-                index = np.empty(n_axis_in_new_argument_i, dtype=object)
-                index[:] = slice(None)
-                argument_i[tuple(index)] = argument_i_tmp
+                elif (shape_in_argument_i == target_shape).all():
+                    pass
+                elif (shape_in_argument_i[shape_in_argument_i != target_shape] == 1).all():
+                    shape_argument_i = shape_argument_i[slice(n_axes, None, 1)]
+                    shape_new_argument_i = np.append(target_shape, shape_argument_i)
+                    n_axis_in_new_argument_i = shape_new_argument_i.size
+                    dtype = argument_i.dtype
+                    argument_i_tmp = argument_i
+                    argument_i = np.empty(shape_new_argument_i, dtype=dtype)
+                    index = np.empty(n_axis_in_new_argument_i, dtype=object)
+                    index[:] = slice(None)
+                    argument_i[tuple(index)] = argument_i_tmp[tuple(index)]
+                else:
+                    shape_new_argument_i = np.append(target_shape, shape_argument_i)
+                    n_axis_in_new_argument_i = shape_new_argument_i.size
+                    dtype = argument_i.dtype
+                    argument_i_tmp = argument_i
+                    for a in range(n_axes):
+                        argument_i_tmp = np.expand_dims(argument_i_tmp, axis=0)
+                    argument_i = np.empty(shape_new_argument_i, dtype=dtype)
+                    index = np.empty(n_axis_in_new_argument_i, dtype=object)
+                    index[:] = slice(None)
+                    argument_i[tuple(index)] = argument_i_tmp
         else:
             dtype_argument_i = type(argument_i)
             argument_i_tmp = argument_i
