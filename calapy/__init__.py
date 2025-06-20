@@ -1,7 +1,7 @@
 import datetime
 import importlib
 
-__version__ = '0.2.0.0'
+__version__ = '0.2.0.1'
 
 
 # TODO: Get the release timestamp automatically from PyPI???
@@ -21,7 +21,7 @@ __maintainer_email__ = 'dr.carmelo.calafiore@gmail.com'
 
 submodules = [
     'array', 'check', 'clock', 'combinations', 'directory', 'download',
-    'format', 'image', 'lists', 'maths', 'mixamo', 'pkl', 'plot', 'preprocessing',
+    'format', 'image', 'lists', 'maths', 'mixamo', 'pkl', 'plot', 'preprocess',
     'shutdown', 'stats', 'stimulation', 'strings', 'threading', 'txt']
 others = []
 __all__ = submodules + others
