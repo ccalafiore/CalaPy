@@ -1,11 +1,13 @@
 import datetime
 import importlib
 
-__version__ = '0.1.21.3'
+__version__ = '0.2.0.0'
 
-__release_day__ = 29
-__release_month_num__ = 12
-__release_year__ = 2023
+
+# TODO: Get the release timestamp automatically from PyPI???
+__release_day__ = 20
+__release_month_num__ = 6
+__release_year__ = 2025
 
 
 __release_date_object__ = datetime.date(__release_year__, __release_month_num__, __release_day__)
@@ -14,8 +16,8 @@ __release_month_name__ = __release_date_object__.__format__('%B')
 del datetime
 
 __author__ = 'Calafiore Carmelo'
-__author_email__ = 'carmelo.calafiore@newcastle.ac.uk'
-__maintainer_email__ = 'carmelo.calafiore@newcastle.ac.uk'
+__author_email__ = 'dr.carmelo.calafiore@gmail.com'
+__maintainer_email__ = 'dr.carmelo.calafiore@gmail.com'
 
 submodules = [
     'array', 'check', 'clock', 'combinations', 'directory', 'download',
