@@ -19,7 +19,7 @@ __maintainer_email__ = 'carmelo.calafiore@newcastle.ac.uk'
 
 submodules = [
     'array', 'check', 'clock', 'combinations', 'directory', 'download',
-    'format', 'image', 'lists', 'maths', 'mixamo', 'ml', 'pkl', 'plot', 'preprocessing',
+    'format', 'image', 'lists', 'maths', 'mixamo', 'pkl', 'plot', 'preprocessing',
     'shutdown', 'stats', 'stimulation', 'strings', 'threading', 'txt']
 others = []
 __all__ = submodules + others

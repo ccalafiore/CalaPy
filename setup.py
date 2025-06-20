@@ -5,31 +5,27 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="calapy",
-    version="0.1.21.3",
+    version="2.0.0",
     author="Carmelo Calafiore",
-    author_email="carmelo.calafiore@newcastle.ac.uk",
-    description="personal package",
+    author_email="dr.carmelo.calafiore@gmail.com",
+    description="Python Package of Low-Level Functions",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://pypi.org/project/calapy",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent"],
     install_requires=[
         'numpy~=1.24.3',
         'scipy~=1.10.1',
-        'torch~=2.0.0',
-        'torchvision~=0.15.1',
-        'torchaudio~=2.0.1',
         'Pillow~=9.5.0',
         'opencv-contrib-python~=4.7.0.72',
         'matplotlib~=3.7.1',
         'selenium~=4.9.0',
         'pygame~=2.3.0',
         'pandas~=2.0.1'],
-    python_requires='>=3.7')
+    python_requires='>=3.6')
 
 # examples of the kw "install_requires"
 # setup(

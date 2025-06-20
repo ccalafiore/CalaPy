@@ -39,7 +39,7 @@
 
     6.1) python -m pip uninstall calapy
 
-    6.2) manualy delete the 2 directories:
+    6.2) manually delete the 2 directories:
         6.2.1) C:\Program Files\Python311\Lib\site-packages\calapy
         6.2.2) C:\Program Files\Python311\Lib\site-packages\calapy-*.*.*.dist-info
         6.2.3) C:\ProgramData\anaconda3\envs\leonardo_with_python_3.11\Lib\site-packages\calapy
