@@ -17,13 +17,13 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent"],
     install_requires=[
-        'numpy~=1.24.3',
-        'scipy~=1.10.1',
-        'opencv-contrib-python~=4.7.0.72',
-        'matplotlib~=3.7.1',
-        'selenium~=4.9.0',
-        'pygame~=2.3.0',
-        'pandas~=2.0.1'],
+        'numpy',
+        'scipy',
+        'opencv-contrib-python',
+        'matplotlib',
+        'selenium',
+        'pygame',
+        'pandas'],
     python_requires='>=3.6')
 
 # examples of the kw "install_requires"
