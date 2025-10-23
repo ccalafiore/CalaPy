@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="calapy",
-    version="0.2.0.1",
+    version="2.0.1",
     author="Carmelo Calafiore",
     author_email="dr.carmelo.calafiore@gmail.com",
-    description="Python Package of Low-Level Functions",
+    description="Basic Toolkit",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://pypi.org/project/calapy",
@@ -19,7 +19,6 @@ setuptools.setup(
     install_requires=[
         'numpy~=1.24.3',
         'scipy~=1.10.1',
-        'Pillow~=9.5.0',
         'opencv-contrib-python~=4.7.0.72',
         'matplotlib~=3.7.1',
         'selenium~=4.9.0',
