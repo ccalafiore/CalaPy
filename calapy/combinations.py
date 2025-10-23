@@ -6,6 +6,73 @@ from . import array as cp_array
 from . import maths as cp_maths
 
 
+class Conditions:
+
+    def __init__(self, conditions):
+
+        """
+
+        :param conditions:
+        :type conditions: list[list[object]]
+
+        """
+
+        if isinstance(conditions, list):
+            self.conditions = conditions
+
+        elif isinstance(conditions, tuple):
+            self.conditions = list(conditions)
+
+        elif isinstance(conditions, np.ndarray):
+            self.conditions = conditions.tolist()
+        else:
+            raise TypeError('conditions')
+
+        self.n_variables = len(self.conditions)
+        self.n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
+
+        self.n_combinations = prod(self.n_conditions)
+
+    def __iter__(self):
+
+        self._i = -1
+        self._combination_indexes_i = np.empty(self.n_variables, dtype='i')
+        self._combination_indexes_i[:] = 0
+
+        self._combination_values_i = [
+            self.conditions[v][self._combination_indexes_i[v]] for v in range(0, self.n_variables, 1)]
+
+        return self
+
+    def __next__(self):
+
+        self._i += 1
+
+        if self._i == 0:
+            return self._combination_indexes_i, self._combination_values_i
+
+        elif self._i < self.n_combinations:
+
+            v = self.n_variables - 1
+            decrease_condition_v = True
+
+            while decrease_condition_v:
+                self._combination_indexes_i[v] += 1
+                if self._combination_indexes_i[v] >= self.n_conditions[v]:
+                    self._combination_indexes_i[v] = 0
+
+                else:
+                    decrease_condition_v = False
+
+                self._combination_values_i[v] = self.conditions[v][self._combination_indexes_i[v]]
+                v -= 1
+
+            return self._combination_indexes_i, self._combination_values_i
+
+        else:
+            raise StopIteration
+
+
 def n_conditions_to_combinations(
         n_conditions,
         axis_combinations=0,

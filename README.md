@@ -19,7 +19,7 @@ Newcastle University
 
 Newcastle, UK
 
-[carmelo.calafiore@newcastle.ac.uk](mailto:carmelo.calafiore@newcastle.ac.uk)
+[dr.carmelo.calafiore@gmail.com](mailto:dr.carmelo.calafiore@gmail.com)
 
 [LinkedIn](https://www.linkedin.com/in/carmelo-calafiore-a07120269)
 

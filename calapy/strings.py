@@ -5,7 +5,6 @@ import typing
 import numpy as np
 import string
 import random
-import torch
 from . import combinations as cp_combinations
 from . import maths as cp_maths
 
@@ -250,10 +249,10 @@ def split_str_to_np(string, sep=None, maxsplit=-1, dtype=None, ignore=True, igno
 
 
 def join(
-        elements: typing.Union[None, int, float, str, list, tuple, np.ndarray, torch.Tensor],
+        elements: typing.Union[None, int, float, str, list, tuple, np.ndarray],
         sep: typing.Optional[str] = None, frmt: typing.Optional[str] = None, ignore: bool = True, ignore_value=None):
 
-    if isinstance(elements, (np.ndarray, torch.Tensor)):
+    if isinstance(elements, np.ndarray):
         elements = elements.tolist()
 
     if frmt is None:
