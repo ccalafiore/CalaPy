@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "basickit"
+version = "0.0.0"
+requires-python = ">= 3.6"
+authors = [
+    {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
+]
+maintainers = [
+    {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
+]
+description = "Basic Python Toolkit"
+readme = {file = "README.txt", content-type = "text/markdown"}
+license = "MIT"
+license-files = ["LICENSE.txt"]
+keywords = ["basic", "tools", "toolkit", "toolbox", "kit", "utilities"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/ccalafiore/CalaPy"
+Issues = "https://github.com/ccalafiore/CalaPy/issues"
