@@ -1,30 +1,28 @@
 # Release Check List
 
-1. Delete 4 folders: "build"; "calapy.egg-info"; "dist".
+1. Delete 2 folders: [calapy.egg-info](calapy.egg-info), [dist](dist).
 
-2. Update the version and release date in calapy/__init__.py.
+2. Update the version and release date in [calapy/__init__.py](src/calapy/__init__.py).
 
-3. Update the version in setup.py.
+3. Update the version in [pyproject.toml](pyproject.toml).
 
 4. Activate conda environment with:
    
    1. Install anaconda
    2. Create a conda environment with:
       ```
-      conda create --name calapy
+      conda create --name myenv
       ```
    3. Activate the environment with:
       ```
-      conda activate calapy
+      conda activate myenv
       ```
 
 5. Open Command Prompt as administrator and run the following commands:
 
    1. Update these modules:
       ```
-      python -m pip install --upgrade pip
-      python -m pip install --upgrade setuptools wheel
-      python -m pip install --upgrade twine
+      python -m pip install --upgrade pip build twine
       ```
    2. Change working directory to the repo's with:
       ```
@@ -33,8 +31,8 @@
 
    3. Run these:
       ```
-      python setup.py sdist bdist_wheel
-      python -m twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
+      python -m build
+      python -m twine upload --repository pypi dist/*
       ```
    4. Close Command Prompt
 
@@ -47,7 +45,7 @@
    - directory\of\anaconda\envs\myenv\Lib\site-packages\calapy
    - directory\of\anaconda\envs\myenv\Lib\site-packages\calapy-\*.\*.\*.\*.dist-info
 
-7. Install calapy with:
+7. Re-install calapy with:
    ```
    python -m pip install --upgrade calapy
    ```
