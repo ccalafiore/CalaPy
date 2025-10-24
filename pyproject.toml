@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calapy"
-version = "0.2.0.2"
+version = "0.2.0.3"
 requires-python = ">= 3.6"
 authors = [
     {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
@@ -13,7 +13,7 @@ maintainers = [
     {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
 ]
 description = "Personal Package"
-readme = {file = "README.txt", content-type = "text/markdown"}
+readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
 license-files = ["LICENSE.txt"]
 keywords = ["basic", "tools", "toolkit", "toolbox", "kit", "utilities"]

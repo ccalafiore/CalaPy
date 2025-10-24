@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="calapy",
-    version="0.2.0.2",
+    version="0.2.0.3",
     author="Carmelo Calafiore",
     author_email="dr.carmelo.calafiore@gmail.com",
     description="Personal Package",
