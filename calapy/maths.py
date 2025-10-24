@@ -95,7 +95,7 @@ def round_to_closest_int(num):
 
             return int_out
 
-        elif num.dtype.kind in ['?', 'b']:
+        elif num.dtype.kind == '?':
             return num.astype(dtype='i')
 
         elif num.dtype.kind == 'O':
