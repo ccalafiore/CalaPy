@@ -8,7 +8,7 @@ setuptools.setup(
     version="0.2.0.2",
     author="Carmelo Calafiore",
     author_email="dr.carmelo.calafiore@gmail.com",
-    description="Basic Toolkit",
+    description="Personal Package",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://pypi.org/project/calapy",
@@ -19,6 +19,9 @@ setuptools.setup(
     install_requires=[
         'numpy',
         'scipy',
+        'torch',
+        'torchvision',
+        'Pillow',
         'opencv-contrib-python',
         'matplotlib',
         'selenium',
