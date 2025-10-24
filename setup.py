@@ -17,16 +17,17 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent"],
     install_requires=[
-        'numpy',
-        'scipy',
-        'torch',
-        'torchvision',
-        'Pillow',
-        'opencv-contrib-python',
-        'matplotlib',
-        'selenium',
-        'pygame',
-        'pandas'],
+        "numpy",
+        "scipy",
+        "pandas",
+        "opencv-contrib-python",
+        "matplotlib",
+        "selenium",
+        "pygame",
+        "torch",
+        "torchvision",
+        "Pillow",
+    ],
     python_requires='>=3.6')
 
 # examples of the kw "install_requires"
