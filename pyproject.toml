@@ -5,6 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "calapy"
 version = "0.2.0.3"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "opencv-contrib-python",
+    "matplotlib",
+    "selenium",
+    "pygame",
+    "torch",
+    "torchvision",
+    "Pillow",
+]
 requires-python = ">= 3.6"
 authors = [
     {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
