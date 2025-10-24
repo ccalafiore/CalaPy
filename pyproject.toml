@@ -3,8 +3,8 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "basickit"
-version = "0.0.0"
+name = "calapy"
+version = "0.2.0.2"
 requires-python = ">= 3.6"
 authors = [
     {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
