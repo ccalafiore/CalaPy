@@ -12,7 +12,7 @@ authors = [
 maintainers = [
     {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
 ]
-description = "Basic Python Toolkit"
+description = "Personal Package"
 readme = {file = "README.txt", content-type = "text/markdown"}
 license = "MIT"
 license-files = ["LICENSE.txt"]
