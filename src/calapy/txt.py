@@ -180,7 +180,9 @@ def csv_file_to_array(
     if delimiter is None:
         delimiter = ','
 
-    if isinstance(rows, slice):
+    if isinstance(rows, int):
+        keeping_rows = [rows]
+    elif isinstance(rows, slice):
         start = rows.start
         if start is None:
             start = 0
@@ -194,10 +196,15 @@ def csv_file_to_array(
             step = 1
 
         keeping_rows = range(start, stop, step)
-    else:
-        keeping_rows = rows
 
-    if isinstance(columns, slice):
+    elif rows is None or isinstance(rows, (list, tuple, range, np.ndarray)):
+        keeping_rows = rows
+    else:
+        raise TypeError('rows must either be int, slice, list, tuple, range, or np.ndarray')
+
+    if isinstance(columns, int):
+        keeping_columns = [columns]
+    elif isinstance(columns, slice):
         start = columns.start
         if start is None:
             start = 0
@@ -211,8 +218,10 @@ def csv_file_to_array(
             step = 1
 
         keeping_columns = range(start, stop, step)
-    else:
+    elif rows is None or isinstance(columns, (list, tuple, range, np.ndarray)):
         keeping_columns = columns
+    else:
+        raise TypeError('columns must either be int, None, slice, list, tuple, range, or np.ndarray')
 
     exclude_rows = None if keeping_rows is None else lambda x: x not in keeping_rows
     table = pd.read_csv(
