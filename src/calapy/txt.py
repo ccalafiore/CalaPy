@@ -218,7 +218,7 @@ def csv_file_to_array(
             step = 1
 
         keeping_columns = range(start, stop, step)
-    elif rows is None or isinstance(columns, (list, tuple, range, np.ndarray)):
+    elif columns is None or isinstance(columns, (list, tuple, range, np.ndarray)):
         keeping_columns = columns
     else:
         raise TypeError('columns must either be int, None, slice, list, tuple, range, or np.ndarray')
