@@ -1,6 +1,7 @@
 
 .idea
 
-calapy.egg-info
-dist
+/dist
 /build
+/calapy.egg-info
+/src/calapy.egg-info
