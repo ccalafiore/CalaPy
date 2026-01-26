@@ -31,7 +31,7 @@ class Conditions:
         self.n_variables = len(self.conditions)
         self.n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
 
-        self.n_combinations = prod(self.n_conditions)
+        self.n_combinations = cp_maths.prod(self.n_conditions)
 
     def __iter__(self):
 
