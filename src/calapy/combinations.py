@@ -1,3 +1,5 @@
+
+
 import numpy as np
 import math
 import itertools
@@ -8,7 +10,7 @@ from . import maths as cp_maths
 
 class Conditions:
 
-    def __init__(self, conditions):
+    def __init__(self, conditions, return_comp_values=True):
 
         """
 
@@ -17,30 +19,67 @@ class Conditions:
 
         """
 
+        if isinstance(return_comp_values, bool):
+            self.return_comp_values = return_comp_values
+        else:
+            raise TypeError('return_comp_values')
+
+
         if isinstance(conditions, list):
             self.conditions = conditions
 
-        elif isinstance(conditions, tuple):
+        elif isinstance(conditions, (tuple, np.ndarray)):
             self.conditions = list(conditions)
 
-        elif isinstance(conditions, np.ndarray):
-            self.conditions = conditions.tolist()
         else:
             raise TypeError('conditions')
 
         self.n_variables = len(self.conditions)
-        self.n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
+
+        # self.n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
+        self.n_conditions = np.empty(shape=self.n_variables, dtype='i')
+
+        for v in range(0, self.n_variables, 1):
+
+            if isinstance(self.conditions[v], int):
+
+                if self.conditions[v] > 0:
+                    self.n_conditions[v] = self.conditions[v]
+
+                    self.conditions[v] = None
+                    # self.conditions[v] = list(range(0, self.conditions[v], 1))
+
+                else:
+                    raise ValueError('conditions[{v:d}]'.format(v=v))
+            else:
+                if isinstance(self.conditions[v], list):
+
+                    pass
+
+                elif isinstance(self.conditions[v], (tuple, np.ndarray)):
+
+                    self.conditions[v] = list(self.conditions[v])
+
+                else:
+                    raise TypeError('conditions[{v:d}]'.format(v=v))
+
+                self.n_conditions[v] = len(self.conditions[v])
 
         self.n_combinations = cp_maths.prod(self.n_conditions)
 
     def __iter__(self):
 
         self._i = -1
-        self._combination_indexes_i = np.empty(self.n_variables, dtype='i')
-        self._combination_indexes_i[:] = 0
+        self._combination_indexes_i = [0 for v in range(0, self.n_variables, 1)]
 
-        self._combination_values_i = [
-            self.conditions[v][self._combination_indexes_i[v]] for v in range(0, self.n_variables, 1)]
+        if self.return_comp_values:
+            self._combination_values_i = [
+                self._combination_indexes_i[v]
+                if self.conditions[v] is None else
+                self.conditions[v][self._combination_indexes_i[v]]
+                for v in range(0, self.n_variables, 1)]
+        else:
+            self._combination_values_i = None
 
         return self
 
@@ -49,7 +88,11 @@ class Conditions:
         self._i += 1
 
         if self._i == 0:
-            return self._combination_indexes_i, self._combination_values_i
+
+            if self.return_comp_values:
+                return self._combination_indexes_i, self._combination_values_i
+            else:
+                return self._combination_indexes_i
 
         elif self._i < self.n_combinations:
 
@@ -64,10 +107,18 @@ class Conditions:
                 else:
                     decrease_condition_v = False
 
-                self._combination_values_i[v] = self.conditions[v][self._combination_indexes_i[v]]
+                if self.return_comp_values:
+                    if self.conditions[v] is None:
+                        self._combination_values_i[v] = self._combination_indexes_i[v]
+                    else:
+                        self._combination_values_i[v] = self.conditions[v][self._combination_indexes_i[v]]
+
                 v -= 1
 
-            return self._combination_indexes_i, self._combination_values_i
+            if self.return_comp_values:
+                return self._combination_indexes_i, self._combination_values_i
+            else:
+                return self._combination_indexes_i
 
         else:
             raise StopIteration
