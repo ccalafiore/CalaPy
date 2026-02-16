@@ -316,6 +316,26 @@ def round_up_to_closest_delta(num, delta=1):
 
 
 def convert_to_int_or_float(num):
+    if isinstance(num, int):
+        return num
+    else:
+        num_rounded = round_to_closest_int(num)
+        if num_rounded == num:
+            return num_rounded
+        else:
+            return float(num)
+
+
+def if_equal_to_the_nearest_int_convert_to_int_else_float(num):
+
+    print(
+        '"if_equal_to_the_nearest_int_convert_to_int_else_float()" will be Decrypted.\n'
+        'Use "convert_to_int_or_float()"')
+
+    return convert_to_int_or_float(num=num)
+
+
+def convert_to_int_or_float_old(num):
 
     if isinstance(num, int):
         return num
@@ -345,17 +365,6 @@ def convert_to_int_or_float(num):
 
         else:
             raise TypeError('num')
-
-
-def if_equal_to_the_nearest_int_convert_to_int_else_float(num):
-    if isinstance(num, int):
-        return num
-    else:
-        num_rounded = round_to_closest_int(num)
-        if num_rounded == num:
-            return num_rounded
-        else:
-            return float(num)
 
 
 def factors_of_x(x, y=1):

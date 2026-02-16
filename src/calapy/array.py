@@ -490,7 +490,142 @@ def split_by_percentages(array, p_samples, axis=0, shuffle=False, sort=False):
     return arrays
 
 
+def repeat(array, factors, axes=0):
+
+    if isinstance(array, (int, float, str)):
+        array = np.asarray([array])
+    elif isinstance(array, (list, tuple)):
+        array = np.asarray(array)
+    elif isinstance(array, np.ndarray):
+        if array.ndim == 0:
+            array = np.expand_dims(array, axis=0)
+
+    n_dims = array.ndim
+
+    if isinstance(factors, (int, float)):
+        factors = [factors]
+
+    if isinstance(factors, (list, tuple)):
+        n_factors = len(factors)
+        for j in range(n_factors):
+            if isinstance(factors[j], (int, float)):
+                pass
+            else:
+                raise ValueError('factors[{j:d}] must be int or float'. format(j=j))
+
+    elif isinstance(factors, np.ndarray):
+
+        if factors.ndim == 0:
+            factors = np.expand_dims(factors, axis=0)
+
+        if factors.ndim == 1:
+            if factors.dtype.kind in ['i', 'f']:
+                factors = factors.tolist()
+                n_factors = len(factors)
+            else:
+                raise TypeError('factors')
+        else:
+            raise ValueError('factors must be a 1d array')
+
+    if n_factors > n_dims:
+        raise ValueError('factors cannot be more than dimemnsions of the array')
+
+    for factor_j in factors:
+        if factor_j < 0:
+            raise ValueError('factors must be equal or greater than 0')
+
+    if isinstance(axes, int):
+        axes = [axes]
+
+    if isinstance(axes, (list, tuple)):
+        n_axes = len(axes)
+        for j in range(n_axes):
+            if isinstance(axes[j], int):
+                pass
+            else:
+                raise ValueError('axes[{j:d}] must be int'.format(j=j))
+
+    elif isinstance(axes, np.ndarray):
+
+        if axes.ndim == 0:
+            axes = np.expand_dims(axes, axis=0)
+
+        if axes.ndim == 1:
+            if axes.dtype.kind == 'i':
+                axes = axes.tolist()
+                n_axes = len(axes)
+            else:
+                raise TypeError('axes')
+        else:
+            raise ValueError('axes must be a 1d array')
+
+    if n_axes > n_dims:
+        raise ValueError('axes cannot be more than dimemnsions of the array')
+
+    for j in range(0, n_axes, 1):
+
+        if (axes[j] < -n_dims) or (axes[j] >= n_dims):
+            raise IndexError('axes[{j:d}]'.format(j=j))
+        elif axes[j] < 0:
+            axes[j] += n_dims
+
+
+    if n_factors != n_axes:
+
+        if n_factors == 1:
+            factors = [factors[0] for j in range(0, n_axes, 1)]
+        elif n_axes == 1:
+            axes = [axes[0] for j in range(0, n_factors, 1)]
+        else:
+            raise ValueError('factors and axes must have the same length')
+
+    indexes = [slice(0, array.shape[d], 1) for d in range(0, n_dims, 1)]
+
+    for j in range(0, n_axes, 1):
+
+        n_samples_true_j = array.shape[axes[j]]
+
+        n_samples_target_j = n_samples_true_j * cp_maths.convert_to_int_or_float(factors[j])
+
+        if isinstance(n_samples_target_j, float):
+            n_samples_target_j = cp_maths.round_up_to_closest_int(n_samples_target_j)
+
+        if n_samples_target_j == n_samples_true_j:
+            pass
+        elif n_samples_target_j < n_samples_true_j:
+            indexes[axes[j]] = slice(0, n_samples_target_j, 1)
+            array = array[tuple(indexes)]
+            n_samples_true_j = array.shape[axes[j]]
+        else:
+            check_size = False
+            while n_samples_target_j > n_samples_true_j:
+
+                if n_samples_target_j < n_samples_true_j * 2:
+
+                    indexes[axes[j]] = slice(0, n_samples_target_j - n_samples_true_j, 1)
+
+                    array_2 = array[tuple(indexes)]
+
+                    check_size = True
+                else:
+                    array_2 = array
+
+                array = np.concatenate([array, array_2], axis=axes[j], dtype=array.dtype)
+
+                n_samples_true_j = array.shape[axes[j]]
+
+                if check_size:
+                    if n_samples_true_j != n_samples_target_j:
+                        raise ValueError('n_samples_target_j not equal to n_samples_true_j')
+
+            indexes[axes[j]] = slice(0, n_samples_true_j, 1)
+
+    return array
+
+
 def pad_array_from_n_samples_target(array, n_samples_target=1, axis=0):
+
+    DeprecationWarning()
 
     try:
         len(array)

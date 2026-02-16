@@ -12,7 +12,7 @@ class Conditions:
 
     def __init__(
             self, conditions, n_repetitions=1,
-            order_variables='rl', variables_in_order=None,
+            order='rl', variables_in_order=None,
             return_comp_values=True,
             dtype=None):
 
@@ -23,14 +23,14 @@ class Conditions:
 
         """
 
-        # order_variables is the order of the variables by which they change their own conditions.
-        # order_variables can either be 'rl' for right-to-left, 'lr' for left-to-right or 'c' for custom.
-        # If order_variables=='c', then variables_in_order must be a list, a tuple or an 1-d array containing the variables
+        # order is the order of the variables by which they change their own conditions.
+        # order can either be 'rl' for right-to-left, 'lr' for left-to-right or 'c' for custom.
+        # If order=='c', then variables_in_order must be a list, a tuple or an 1-d array containing the variables
         # in the custom order by which the variables change their own conditions:
         #
         # Requirements:
-        # 1) order_variables == 'rl' or order_variables == 'lr' or order_variables == 'c';
-        # If order_variables=='c', then:
+        # 1) order == 'rl' or order == 'lr' or order == 'c';
+        # If order=='c', then:
         #     2) len(variables_in_order) == len(conditions);
         #     3) variables_in_order contains all integers from 0 to (len(conditions)-1);
         #     4) variables_in_order cannot contain repeated integers.
@@ -96,24 +96,24 @@ class Conditions:
 
         self.variables = np.arange(self.n_variables)
 
-        if isinstance(order_variables, str):
-            if order_variables in ['rl', 'lr', 'c']:
-                self.order_variables = order_variables
+        if isinstance(order, str):
+            if order in ['rl', 'lr', 'c']:
+                self.order = order
             else:
                 # check requirement 1
                 raise ValueError(
-                    'order_variables can either be \'rl\' for right-to-left, '
+                    'order can either be \'rl\' for right-to-left, '
                     '\'lr\' for left-to-right or \'c\' for custom.\n'
-                    'Now, order_variables = {}'.format(order_variables))
+                    'Now, order = {}'.format(order))
         else:
-            raise TypeError('order_variables mush be a str')
+            raise TypeError('order mush be a str')
 
 
-        if self.order_variables == 'rl':
+        if self.order == 'rl':
             self.variables_in_order = self.variables[::-1]
-        elif self.order_variables == 'lr':
+        elif self.order == 'lr':
             self.variables_in_order = self.variables
-        elif self.order_variables == 'c':
+        elif self.order == 'c':
 
             self.variables_in_order = np.asarray(variables_in_order, dtype='i')
 
@@ -137,7 +137,7 @@ class Conditions:
 
         if dtype is None or dtype == str:
 
-            arrays = [None for v in (0, self.n_variables, 1)]  # type: list[np.ndarray]
+            arrays = [None for v in range(0, self.n_variables, 1)]  # type: list[np.ndarray]
 
             for v in range(0, self.n_variables, 1):
 
@@ -231,42 +231,37 @@ class Conditions:
 
         combinations = np.empty(shape_combinations, dtype=self.dtype)
 
-        i_variable = self.variables_in_order[0]
+        v = self.variables_in_order[0]
         indexes_combinations = np.empty(2, dtype='O')
-        indexes_combinations[axis_variables] = i_variable
-        for i_condition in range(self.n_conditions[i_variable]):
+        indexes_combinations[axis_variables] = v
+        for c in range(0, self.n_conditions[v], 1):
 
-            indexes_combinations[axis_combinations] = slice(
-                i_condition, self.n_combinations, self.n_conditions[i_variable])
+            indexes_combinations[axis_combinations] = slice(c, self.n_combinations, self.n_conditions[v])
 
-            combinations[tuple(indexes_combinations)] = (
-                i_condition if self.conditions[i_variable][i_condition] is None else
-                self.conditions[i_variable][i_condition])
+            combinations[tuple(indexes_combinations)] = (c if self.conditions[v] is None else self.conditions[v][c])
 
         indexes_combinations[axis_combinations] = slice(0, self.n_combinations, 1)
 
-        cumulative_n_combinations = self.n_conditions[i_variable]
-        for i_variable in self.variables_in_order[1:]:
+        cumulative_n_combinations = self.n_conditions[v]
+        for v in self.variables_in_order[1:]:
             cumulative_combinations = np.empty(
-                cumulative_n_combinations * self.n_conditions[i_variable], dtype=combinations.dtype)
-            for i_condition in range(self.n_conditions[i_variable]):
+                cumulative_n_combinations * self.n_conditions[v], dtype=combinations.dtype)
+            for c in range(self.n_conditions[v]):
 
-                cumulative_combinations[slice(
-                    i_condition * cumulative_n_combinations,
-                    (i_condition + 1) * cumulative_n_combinations
-                )] = (
-                    i_condition if self.conditions[i_variable][i_condition] is None else
-                    self.conditions[i_variable][i_condition])
+                cumulative_combinations[
+                    slice(c * cumulative_n_combinations, (c + 1) * cumulative_n_combinations)
+                ] = c if self.conditions[v] is None else self.conditions[v][c]
 
-            indexes_combinations[axis_variables] = i_variable
-            if cumulative_combinations.size < self.n_combinations:
-                combinations[tuple(indexes_combinations)] = cp_array.pad_array_from_n_samples_target(
-                    cumulative_combinations, n_samples_target=self.n_combinations)
-            elif cumulative_combinations.size == self.n_combinations:
+            indexes_combinations[axis_variables] = v
+            if cumulative_combinations.shape[0] < self.n_combinations:
+                factor_v = self.n_combinations / cumulative_combinations.shape[0]
+                combinations[tuple(indexes_combinations)] = cp_array.repeat(
+                    cumulative_combinations, factors=factor_v, axes=0)
+            elif cumulative_combinations.shape[0] == self.n_combinations:
                 combinations[tuple(indexes_combinations)] = cumulative_combinations
             else:
                 raise Exception('something wrong')
-            cumulative_n_combinations *= self.n_conditions[i_variable]
+            cumulative_n_combinations *= self.n_conditions[v]
 
         return combinations
 
