@@ -62,6 +62,8 @@ class Conditions:
         if self.n_variables < 1:
             raise ValueError('n_variables must be a positive integer.')
 
+        self._n_variables_minus_one = self.n_variables - 1
+
         # self.n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
         self.n_conditions = np.empty(shape=self.n_variables, dtype='i')
 
@@ -134,7 +136,6 @@ class Conditions:
                     raise ValueError('variables_in_order cannot contain repeated integers.\n'
                                      '{} is a repeated integer.'.format(v))
 
-
         if dtype is None or dtype == str:
 
             arrays = [None for v in range(0, self.n_variables, 1)]  # type: list[np.ndarray]
@@ -162,56 +163,57 @@ class Conditions:
 
     def __iter__(self):
 
-        self._i = -1
-        self._combination_indexes_i = [0 for v in range(0, self.n_variables, 1)]
+        self._i = 0
+
+        self.combination_indexes_i = [0 for v in range(0, self.n_variables, 1)]
 
         if self.return_comp_values:
-            self._combination_values_i = [
-                self._combination_indexes_i[v]
-                if self.conditions[v] is None else
-                self.conditions[v][self._combination_indexes_i[v]]
-                for v in range(0, self.n_variables, 1)]
+            self.combination_values_i = np.asarray(
+                [self.combination_indexes_i[v] if self.conditions[v] is None else
+                 self.conditions[v][self.combination_indexes_i[v]] for v in range(0, self.n_variables, 1)],
+                dtype=self.dtype)
         else:
-            self._combination_values_i = None
+            self.combination_values_i = None
 
         return self
 
     def __next__(self):
 
-        self._i += 1
+        if self._i < self.n_combinations:
 
-        if self._i == 0:
+            if self._i > 0:
 
-            if self.return_comp_values:
-                return self._combination_indexes_i, self._combination_values_i
-            else:
-                return self._combination_indexes_i
+                u = 0
 
-        elif self._i < self.n_combinations:
+                is_next_comb_not_found = True
+                while is_next_comb_not_found:
 
-            v = self.n_variables - 1
-            decrease_condition_v = True
+                    v = self.variables_in_order[u]
 
-            while decrease_condition_v:
-                self._combination_indexes_i[v] += 1
-                if self._combination_indexes_i[v] >= self.n_conditions[v]:
-                    self._combination_indexes_i[v] = 0
+                    self.combination_indexes_i[v] += 1
+                    if self.combination_indexes_i[v] >= self.n_conditions[v]:
+                        self.combination_indexes_i[v] = 0
 
-                else:
-                    decrease_condition_v = False
-
-                if self.return_comp_values:
-                    if self.conditions[v] is None:
-                        self._combination_values_i[v] = self._combination_indexes_i[v]
+                        if u >= self._n_variables_minus_one:
+                            is_next_comb_not_found = False
                     else:
-                        self._combination_values_i[v] = self.conditions[v][self._combination_indexes_i[v]]
+                        is_next_comb_not_found = False
 
-                v -= 1
+                    if self.return_comp_values:
+                        if self.conditions[v] is None:
+                            self.combination_values_i[v] = self.combination_indexes_i[v]
+                        else:
+                            self.combination_values_i[v] = self.conditions[v][self.combination_indexes_i[v]]
+
+                    u += 1
+
+            i = self._i
+            self._i += 1
 
             if self.return_comp_values:
-                return self._combination_indexes_i, self._combination_values_i
+                return i, self.combination_indexes_i, self.combination_values_i
             else:
-                return self._combination_indexes_i
+                return i, self.combination_indexes_i
 
         else:
             raise StopIteration
@@ -231,7 +233,8 @@ class Conditions:
 
         combinations = np.empty(shape_combinations, dtype=self.dtype)
 
-        v = self.variables_in_order[0]
+        u = 0
+        v = self.variables_in_order[u]
         indexes_combinations = np.empty(2, dtype='O')
         indexes_combinations[axis_variables] = v
         for c in range(0, self.n_conditions[v], 1):
@@ -243,7 +246,8 @@ class Conditions:
         indexes_combinations[axis_combinations] = slice(0, self.n_combinations, 1)
 
         cumulative_n_combinations = self.n_conditions[v]
-        for v in self.variables_in_order[1:]:
+        u += 1
+        for v in self.variables_in_order[slice(u, self.n_variables, 1)]:
             cumulative_combinations = np.empty(
                 cumulative_n_combinations * self.n_conditions[v], dtype=combinations.dtype)
             for c in range(self.n_conditions[v]):
