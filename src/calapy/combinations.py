@@ -6,15 +6,14 @@ import itertools
 from . import format as cp_format
 from . import array as cp_array
 from . import maths as cp_maths
+# from . import clock as cp_clock
 
 
 class Conditions:
 
     def __init__(
             self, conditions, n_repetitions=1,
-            order='rl', variables_in_order=None,
-            return_comp_values=True,
-            dtype=None):
+            order='rl', variables_in_order=None, dtype=None):
 
         """
 
@@ -35,12 +34,6 @@ class Conditions:
         #     3) variables_in_order contains all integers from 0 to (len(conditions)-1);
         #     4) variables_in_order cannot contain repeated integers.
 
-
-        if isinstance(return_comp_values, bool):
-            self.return_comp_values = return_comp_values
-        else:
-            raise TypeError('return_comp_values')
-
         if isinstance(n_repetitions, int):
             if n_repetitions > 0:
                 self.n_repetitions = n_repetitions
@@ -58,23 +51,35 @@ class Conditions:
         else:
             raise TypeError('conditions')
 
+
         self.n_variables = len(self.conditions)
         if self.n_variables < 1:
             raise ValueError('n_variables must be a positive integer.')
 
-        self._n_variables_minus_one = self.n_variables - 1
+        self.__n_variables_minus_one__ = self.n_variables - 1
+
+        self.variables = np.arange(self.n_variables)
+
 
         # self.n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
-        self.n_conditions = np.empty(shape=self.n_variables, dtype='i')
+        # self.n_conditions = np.empty(shape=self.n_variables, dtype=None)
+        # self.n_conditions = [None for v in range(0, self.n_variables, 1)]
+
+        self.n_conditions = []
+        self.are_conditions_ints = [] # [isinstance(condition_v, int) for condition_v in self.conditions]
+
+        arrays = []
 
         for v in range(0, self.n_variables, 1):
 
-            if isinstance(self.conditions[v], int):
+            self.are_conditions_ints.append(isinstance(self.conditions[v], int))
+
+            if self.are_conditions_ints[v]:
 
                 if self.conditions[v] > 0:
-                    self.n_conditions[v] = self.conditions[v]
+                    self.n_conditions.append(self.conditions[v])
 
-                    self.conditions[v] = None
+                    # self.conditions[v] = None
                     # self.conditions[v] = list(range(0, self.conditions[v], 1))
 
                 else:
@@ -91,12 +96,13 @@ class Conditions:
                 else:
                     raise TypeError('conditions[{v:d}]'.format(v=v))
 
-                self.n_conditions[v] = len(self.conditions[v])
+                self.n_conditions.append(len(self.conditions[v]))
 
+            arrays.append(np.arange(self.n_conditions[v] - 2, self.n_conditions[v], 1, dtype='i'))
 
-        self.n_combinations = cp_maths.prod(self.n_conditions) * n_repetitions
+        self.n_conditions = np.asarray(self.n_conditions, dtype=np.concatenate(arrays, axis=0).dtype)
 
-        self.variables = np.arange(self.n_variables)
+        self.n_combinations = cp_maths.prod(self.n_conditions) * self.n_repetitions
 
         if isinstance(order, str):
             if order in ['rl', 'lr', 'c']:
@@ -109,7 +115,6 @@ class Conditions:
                     'Now, order = {}'.format(order))
         else:
             raise TypeError('order mush be a str')
-
 
         if self.order == 'rl':
             self.variables_in_order = self.variables[::-1]
@@ -136,30 +141,22 @@ class Conditions:
                     raise ValueError('variables_in_order cannot contain repeated integers.\n'
                                      '{} is a repeated integer.'.format(v))
 
-        if dtype is None or dtype == str:
+        for v in range(0, self.n_variables, 1):
 
-            arrays = [None for v in range(0, self.n_variables, 1)]  # type: list[np.ndarray]
+            if self.are_conditions_ints[v]:
+                # arrays[v] = np.arange(self.n_conditions[v] - 2, self.n_conditions[v], 1, dtype='i')
 
-            for v in range(0, self.n_variables, 1):
+                if dtype is not None:
+                    arrays[v] = arrays[v].astype(dtype=dtype)
 
-                if self.conditions[v] is None:
-                    arrays[v] = np.arange(max(self.n_conditions[v] - 2, 0), self.n_conditions[v], 1, dtype='i')
+            elif isinstance(self.conditions[v], np.ndarray):
 
-                    if dtype is not None:
+                arrays[v] = self.conditions[v]
 
-                        arrays[v] = arrays[v].astype(dtype=dtype)
+            else:
+                arrays[v] = np.asarray(self.conditions[v], dtype=dtype)
 
-                elif isinstance(self.conditions[v], np.ndarray):
-
-                    arrays[v] = self.conditions[v]
-
-                else:
-                    arrays[v] = np.asarray(self.conditions[v], dtype=dtype)
-
-            self.dtype = np.concatenate(arrays, axis=0, dtype=dtype).dtype
-        else:
-            self.dtype = np.dtype(dtype=dtype)
-
+        self.dtype = np.concatenate(arrays, axis=0, dtype=dtype).dtype
 
     def __iter__(self):
 
@@ -167,13 +164,10 @@ class Conditions:
 
         self.combination_indexes_i = [0 for v in range(0, self.n_variables, 1)]
 
-        if self.return_comp_values:
-            self.combination_values_i = np.asarray(
-                [self.combination_indexes_i[v] if self.conditions[v] is None else
-                 self.conditions[v][self.combination_indexes_i[v]] for v in range(0, self.n_variables, 1)],
-                dtype=self.dtype)
-        else:
-            self.combination_values_i = None
+        self.combination_values_i = [
+            self.combination_indexes_i[v] if self.are_conditions_ints[v] else
+            self.conditions[v][self.combination_indexes_i[v]] for v in range(0, self.n_variables, 1)
+        ]
 
         return self
 
@@ -194,29 +188,390 @@ class Conditions:
                     if self.combination_indexes_i[v] >= self.n_conditions[v]:
                         self.combination_indexes_i[v] = 0
 
-                        if u >= self._n_variables_minus_one:
+                        if u >= self.__n_variables_minus_one__:
                             is_next_comb_not_found = False
                     else:
                         is_next_comb_not_found = False
 
-                    if self.return_comp_values:
-                        if self.conditions[v] is None:
-                            self.combination_values_i[v] = self.combination_indexes_i[v]
-                        else:
-                            self.combination_values_i[v] = self.conditions[v][self.combination_indexes_i[v]]
+                    if self.are_conditions_ints[v]:
+                        self.combination_values_i[v] = self.combination_indexes_i[v]
+                    else:
+                        self.combination_values_i[v] = self.conditions[v][self.combination_indexes_i[v]]
 
                     u += 1
 
             i = self._i
             self._i += 1
 
-            if self.return_comp_values:
-                return i, self.combination_indexes_i, self.combination_values_i
-            else:
-                return i, self.combination_indexes_i
+            return i, self.combination_indexes_i, self.combination_values_i
 
         else:
             raise StopIteration
+
+    def __len__(self):
+        return self.n_combinations
+
+    def __combine__(self):
+
+        """Return all combinations of Conditions
+
+        This is a function for experimets. This is a slower version of Conditions.combine(). Use Conditions.combine().
+
+        :return:
+        :rtype: tuple[list[list[int]],list[list]]
+        """
+
+        # return [out_i for out_i in self]
+
+        # i = []
+        combination_indexes = []
+        combination_values = []
+        for out_i in self:
+            combination_indexes.append(out_i[1])
+
+            combination_values.append(out_i[2])
+
+        return combination_indexes, combination_values
+
+    def combine(self, axis_combinations=0):
+
+        if axis_combinations is None:
+            axis_combinations = 0
+        elif axis_combinations not in [0, 1]:
+            raise ValueError('axis_combinations must be 0 or 1.')
+
+        axis_variables = int(not(bool(axis_combinations)))
+        shape_combinations = np.empty(2, dtype=int)
+        shape_combinations[axis_combinations] = self.n_combinations
+        shape_combinations[axis_variables] = self.n_variables
+
+        combination_indexes = np.empty(shape_combinations, dtype=self.n_conditions.dtype)
+        combination_values = np.empty(shape_combinations, dtype=self.dtype)
+
+        u = 0
+        v = self.variables_in_order[u]
+        indexes = np.empty(2, dtype='O')
+        indexes[axis_variables] = v
+        for c in range(0, self.n_conditions[v], 1):
+            indexes[axis_combinations] = slice(c, self.n_combinations, self.n_conditions[v])
+
+            tuple_indexes = tuple(indexes)
+            combination_indexes[tuple_indexes] = c
+            combination_values[tuple_indexes] = c if self.are_conditions_ints[v] else self.conditions[v][c]
+
+        indexes[axis_combinations] = slice(0, self.n_combinations, 1)
+
+        cumulative_n_combinations = self.n_conditions[v]
+        u += 1
+        for v in self.variables_in_order[slice(u, self.n_variables, 1)]:
+
+            cumulative_n_combinations *= self.n_conditions[v]
+
+            cumulative_combination_indexes = np.empty(cumulative_n_combinations, dtype=combination_indexes.dtype)
+
+            cumulative_combination_values = np.empty(cumulative_n_combinations, dtype=combination_values.dtype)
+
+            for c in range(self.n_conditions[v]):
+                indexes_cum_combinations = slice(
+                    c * cumulative_n_combinations, (c + 1) * cumulative_n_combinations)
+
+                cumulative_combination_indexes[indexes_cum_combinations] = c
+
+                cumulative_combination_values[indexes_cum_combinations
+                ] = c if self.are_conditions_ints[v] else self.conditions[v][c]
+
+            if cumulative_combination_values.shape[0] > self.n_combinations:
+                raise Exception('something wrong')
+            else:
+                indexes[axis_variables] = v
+                tuple_indexes = tuple(indexes)
+
+                if cumulative_combination_values.shape[0] < self.n_combinations:
+                    factor_v = self.n_combinations / cumulative_combination_values.shape[0]
+
+                    combination_indexes[tuple_indexes] = cp_array.repeat(
+                        cumulative_combination_indexes, factors=factor_v, axes=0)
+
+                    combination_values[tuple_indexes] = cp_array.repeat(
+                        cumulative_combination_values, factors=factor_v, axes=0)
+
+                elif cumulative_combination_values.shape[0] == self.n_combinations:
+
+                    combination_indexes[tuple_indexes] = cumulative_combination_indexes
+                    combination_values[tuple_indexes] = cumulative_combination_values
+
+        return combination_indexes, combination_values
+
+
+class SlowerConditions:
+
+    def __init__(
+            self, conditions, n_repetitions=1,
+            order='rl', variables_in_order=None, dtype=None):
+
+        """
+
+        :param conditions:
+        :type conditions: list[int | list | tuple | np.ndarray]
+
+        """
+
+        # order is the order of the variables by which they change their own conditions.
+        # order can either be 'rl' for right-to-left, 'lr' for left-to-right or 'c' for custom.
+        # If order=='c', then variables_in_order must be a list, a tuple or an 1-d array containing the variables
+        # in the custom order by which the variables change their own conditions:
+        #
+        # Requirements:
+        # 1) order == 'rl' or order == 'lr' or order == 'c';
+        # If order=='c', then:
+        #     2) len(variables_in_order) == len(conditions);
+        #     3) variables_in_order contains all integers from 0 to (len(conditions)-1);
+        #     4) variables_in_order cannot contain repeated integers.
+
+
+        if isinstance(n_repetitions, int):
+            if n_repetitions > 0:
+                self.n_repetitions = n_repetitions
+            else:
+                raise ValueError('n_repetitions must be a positive integer.')
+        else:
+            raise TypeError('n_repetitions')
+
+
+        if isinstance(conditions, list):
+            self.conditions = conditions
+
+        elif isinstance(conditions, (tuple, np.ndarray)):
+            self.conditions = list(conditions)
+
+        else:
+            raise TypeError('conditions')
+
+
+        if isinstance(order, str):
+            if order in ['rl', 'lr', 'c']:
+                self.order = order
+            else:
+                # check requirement 1
+                raise ValueError(
+                    'order can either be \'rl\' for right-to-left, '
+                    '\'lr\' for left-to-right or \'c\' for custom.\n'
+                    'Now, order = {}'.format(order))
+        else:
+            raise TypeError('order mush be a str')
+
+
+        if self.order == 'c':
+
+            self.__variables_in_order__ = np.asarray(variables_in_order, dtype='i')
+
+            if self.__variables_in_order__.ndim != 1:
+                raise ValueError('variables_in_order must have 1 dimension.')
+
+            # check requirement 2
+            if len(self.__variables_in_order__) != self.n_variables:
+                raise ValueError('The following condition must be met:\nlen(variables_in_order) == len(conditions).')
+            # check requirement 3
+            for v in range(self.n_variables):
+                if v not in self.__variables_in_order__:
+                    raise ValueError('variables_in_order must contain all integers from 0 to (len(conditions)-1).\n'
+                                     '{} is not in variables_in_order.'.format(v))
+            # check requirement 4
+            for v in self.__variables_in_order__:
+                if np.sum(v == self.__variables_in_order__) > 1:
+                    raise ValueError('variables_in_order cannot contain repeated integers.\n'
+                                     '{} is a repeated integer.'.format(v))
+
+        # Conditions.__dtype__ is the original dtype
+        self.__dtype__ = dtype
+
+    @property
+    def n_variables(self):
+        n_variables = len(self.conditions)
+        if n_variables < 1:
+            raise ValueError('n_variables must be a positive integer.')
+
+        return n_variables
+
+    @property
+    def __n_variables_minus_one__(self):
+
+        return self.n_variables - 1
+
+    @property
+    def variables(self):
+
+        return np.arange(self.n_variables)
+
+    @property
+    def variables_in_order(self):
+
+        if self.n_variables == len(self.__variables_in_order__):
+
+            return self.__variables_in_order__
+        else:
+            if self.order == 'rl':
+
+                return self.variables[::-1]
+
+            elif self.order == 'lr':
+
+                return self.variables
+
+            elif self.order == 'c':
+
+                raise ValueError(
+                    'If Condition.order is "c", then you cannot change the number of variables in the Conditions.')
+
+    @property
+    def are_conditions_ints(self):
+
+        return [isinstance(condition_v, int) for condition_v in self.conditions]
+
+
+
+    @property
+    def n_conditions(self):
+
+        # n_conditions = np.asarray([len(self.conditions[v]) for v in range(0, self.n_variables, 1)], dtype='i')
+        # n_conditions = np.empty(shape=self.n_variables, dtype=None)
+        n_conditions = [None for v in range(0, self.n_variables, 1)]
+
+        for v in range(0, self.n_variables, 1):
+
+            # if self.conditions[v] is None:
+            #     continue
+
+            if self.are_conditions_ints[v]:
+
+                if self.conditions[v] > 0:
+                    n_conditions[v] = self.conditions[v]
+
+                    # self.conditions[v] = None
+                    # self.conditions[v] = list(range(0, self.conditions[v], 1))
+
+                else:
+                    raise ValueError('conditions[{v:d}]'.format(v=v))
+            else:
+                if isinstance(self.conditions[v], list):
+
+                    pass
+
+                elif isinstance(self.conditions[v], (tuple, np.ndarray)):
+
+                    self.conditions[v] = list(self.conditions[v])
+
+                else:
+                    raise TypeError('conditions[{v:d}]'.format(v=v))
+
+                n_conditions[v] = len(self.conditions[v])
+
+        return np.asarray(n_conditions, dtype='i')
+
+    @property
+    def n_combinations(self):
+
+        return cp_maths.prod(self.n_conditions) * self.n_repetitions
+
+    @property
+    def dtype(self):
+
+        arrays = [None for v in range(0, self.n_variables, 1)]  # type: list[np.ndarray]
+
+        for v in range(0, self.n_variables, 1):
+
+            if self.are_conditions_ints[v]:
+                arrays[v] = np.arange(max(self.n_conditions[v] - 2, 0), self.n_conditions[v], 1, dtype='i')
+
+                if self.__dtype__ is not None:
+
+                    arrays[v] = arrays[v].astype(dtype=self.__dtype__)
+
+            elif isinstance(self.conditions[v], np.ndarray):
+
+                arrays[v] = self.conditions[v]
+
+            else:
+                arrays[v] = np.asarray(self.conditions[v], dtype=self.__dtype__)
+
+        return np.concatenate(arrays, axis=0, dtype=self.__dtype__).dtype
+
+    def __iter__(self):
+
+        self._i = 0
+
+        self.combination_indexes_i = [0 for v in range(0, self.n_variables, 1)]
+
+        self.combination_values_i = [
+            self.combination_indexes_i[v] if self.are_conditions_ints[v] else
+            self.conditions[v][self.combination_indexes_i[v]] for v in range(0, self.n_variables, 1)
+        ]
+
+        return self
+
+    def __next__(self):
+
+        if self._i < self.n_combinations:
+
+            if self._i > 0:
+
+                u = 0
+
+                is_next_comb_not_found = True
+                while is_next_comb_not_found:
+
+                    v = self.variables_in_order[u]
+
+                    self.combination_indexes_i[v] += 1
+                    if self.combination_indexes_i[v] >= self.n_conditions[v]:
+                        self.combination_indexes_i[v] = 0
+
+                        if u >= self.__n_variables_minus_one__:
+                            is_next_comb_not_found = False
+                    else:
+                        is_next_comb_not_found = False
+
+
+                    if self.are_conditions_ints[v]:
+                        self.combination_values_i[v] = self.combination_indexes_i[v]
+                    else:
+                        self.combination_values_i[v] = self.conditions[v][self.combination_indexes_i[v]]
+
+                    u += 1
+
+            i = self._i
+            self._i += 1
+
+            return i, self.combination_indexes_i, self.combination_values_i
+
+        else:
+            raise StopIteration
+
+    def __len__(self):
+        return self.n_combinations
+
+    def __combine__(self):
+
+        """Return all combinations of Conditions
+
+        This is a function for experimets. This is a slower version of Conditions.combine(). Use Conditions.combine().
+
+        :return:
+        :rtype: tuple[list[list[int]],list[list]]
+        """
+
+        # return [out_i for out_i in self]
+
+        # i = []
+        combination_indexes = []
+        combination_values = []
+        for out_i in self:
+
+            combination_indexes.append(out_i[1])
+
+            combination_values.append(out_i[2])
+
+        return combination_indexes, combination_values
 
     def combine(self, axis_combinations=0):
 
@@ -231,43 +586,65 @@ class Conditions:
         shape_combinations[axis_combinations] = self.n_combinations
         shape_combinations[axis_variables] = self.n_variables
 
-        combinations = np.empty(shape_combinations, dtype=self.dtype)
+        combination_indexes = np.empty(shape_combinations, dtype=self.n_conditions.dtype)
+        combination_values = np.empty(shape_combinations, dtype=self.dtype)
 
         u = 0
         v = self.variables_in_order[u]
-        indexes_combinations = np.empty(2, dtype='O')
-        indexes_combinations[axis_variables] = v
+        indexes = np.empty(2, dtype='O')
+        indexes[axis_variables] = v
         for c in range(0, self.n_conditions[v], 1):
 
-            indexes_combinations[axis_combinations] = slice(c, self.n_combinations, self.n_conditions[v])
+            indexes[axis_combinations] = slice(c, self.n_combinations, self.n_conditions[v])
 
-            combinations[tuple(indexes_combinations)] = (c if self.conditions[v] is None else self.conditions[v][c])
+            tuple_indexes = tuple(indexes)
+            combination_indexes[tuple_indexes] = c
+            combination_values[tuple_indexes] = c if self.are_conditions_ints[v] else self.conditions[v][c]
 
-        indexes_combinations[axis_combinations] = slice(0, self.n_combinations, 1)
+        indexes[axis_combinations] = slice(0, self.n_combinations, 1)
 
         cumulative_n_combinations = self.n_conditions[v]
         u += 1
         for v in self.variables_in_order[slice(u, self.n_variables, 1)]:
-            cumulative_combinations = np.empty(
-                cumulative_n_combinations * self.n_conditions[v], dtype=combinations.dtype)
-            for c in range(self.n_conditions[v]):
 
-                cumulative_combinations[
-                    slice(c * cumulative_n_combinations, (c + 1) * cumulative_n_combinations)
-                ] = c if self.conditions[v] is None else self.conditions[v][c]
-
-            indexes_combinations[axis_variables] = v
-            if cumulative_combinations.shape[0] < self.n_combinations:
-                factor_v = self.n_combinations / cumulative_combinations.shape[0]
-                combinations[tuple(indexes_combinations)] = cp_array.repeat(
-                    cumulative_combinations, factors=factor_v, axes=0)
-            elif cumulative_combinations.shape[0] == self.n_combinations:
-                combinations[tuple(indexes_combinations)] = cumulative_combinations
-            else:
-                raise Exception('something wrong')
             cumulative_n_combinations *= self.n_conditions[v]
 
-        return combinations
+            cumulative_combination_indexes = np.empty(cumulative_n_combinations, dtype=combination_indexes.dtype)
+
+            cumulative_combination_values = np.empty(cumulative_n_combinations, dtype=combination_values.dtype)
+
+            for c in range(self.n_conditions[v]):
+
+                indexes_cum_combinations = slice(
+                    c * cumulative_n_combinations, (c + 1) * cumulative_n_combinations)
+
+                cumulative_combination_indexes[indexes_cum_combinations] = c
+
+                cumulative_combination_values[indexes_cum_combinations
+                ] = c if self.are_conditions_ints[v] else self.conditions[v][c]
+
+
+            if cumulative_combination_values.shape[0] > self.n_combinations:
+                raise Exception('something wrong')
+            else:
+                indexes[axis_variables] = v
+                tuple_indexes = tuple(indexes)
+
+                if cumulative_combination_values.shape[0] < self.n_combinations:
+                    factor_v = self.n_combinations / cumulative_combination_values.shape[0]
+
+                    combination_indexes[tuple_indexes] = cp_array.repeat(
+                        cumulative_combination_indexes, factors=factor_v, axes=0)
+
+                    combination_values[tuple_indexes] = cp_array.repeat(
+                        cumulative_combination_values, factors=factor_v, axes=0)
+
+                elif cumulative_combination_values.shape[0] == self.n_combinations:
+
+                    combination_indexes[tuple_indexes] = cumulative_combination_indexes
+                    combination_values[tuple_indexes] = cumulative_combination_values
+
+        return combination_indexes, combination_values
 
 
 def n_conditions_to_combinations(
