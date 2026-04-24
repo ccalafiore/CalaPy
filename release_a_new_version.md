@@ -18,7 +18,7 @@
    1. Install anaconda
    2. Create a conda environment with:
       ```
-      conda create --name myenv
+      conda create --name myenv python
       ```
    3. Activate the environment with:
       ```
