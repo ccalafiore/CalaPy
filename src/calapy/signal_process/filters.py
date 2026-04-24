@@ -3,6 +3,62 @@ import numpy as np
 import math
 
 
+def format_int(x):
+
+    if isinstance(x, int):
+        return x
+    elif isinstance(x, np.ndarray):
+        if x.dtype.kind == 'i':
+            return x
+        else:
+            raise TypeError('x')
+    else:
+        raise TypeError('x')
+
+
+def format_float(x):
+
+    if isinstance(x, int):
+        return float(x)
+    elif isinstance(x, float):
+        return x
+    elif isinstance(x, np.ndarray):
+        if x.dtype.kind == 'i':
+            return x.astype(dtype='f')
+        elif x.dtype.kind == 'f':
+            return x
+        else:
+            raise TypeError('x')
+    else:
+        raise TypeError('x')
+
+
+def format_ints(x):
+
+    if isinstance(x, int):
+        return [format_int(x=x)]
+    elif isinstance(x, (list, tuple)):
+        return [format_int(x=x_i) for x_i in x]
+    elif isinstance(x, np.ndarray):
+        return format_int(x=x)
+    else:
+        raise TypeError('x')
+
+
+def format_floats(x):
+
+    if isinstance(x, (int, float)):
+        return [format_float(x=x)]
+
+    elif isinstance(x, (list, tuple)):
+        return [format_float(x=x_i) for x_i in x]
+
+    elif isinstance(x, np.ndarray):
+        return format_float(x=x)
+    else:
+        raise TypeError('x')
+
+
 def gauss_nd(x, mu=0, sigma=1, a=None):
 
 
@@ -46,7 +102,7 @@ def gauss_nd(x, mu=0, sigma=1, a=None):
 
     if a is None:
         two_pis = 2.0 * math.pi
-        a = 1.0 / prod([sigma[d] * math.sqrt(two_pis) for d in range(0, n_dims, 1)])
+        a = 1.0 / math.prod([sigma[d] * math.sqrt(two_pis) for d in range(0, n_dims, 1)])
 
     a = format_float(x=a)
 
@@ -60,6 +116,8 @@ def gauss_nd(x, mu=0, sigma=1, a=None):
 
 def gauss_1d(x, mu=0, sigma=1, a=None):
 
+    # This function needs to be tested
+
     x = format_float(x=x)
     mu = format_float(x=mu)
     sigma = format_float(x=sigma)
@@ -67,7 +125,7 @@ def gauss_1d(x, mu=0, sigma=1, a=None):
     if a is None:
         a = 1.0 / (sigma * math.sqrt(2.0 * math.pi))
 
-    return gauss_nd(x=[x, y], mu=[mu, mu], sigma=[sigma, sigma], a=a)
+    return gauss_nd(x=[x], mu=[mu], sigma=[sigma], a=a)
 
 
 def gauss_2d(x, y, mu_x=0, mu_y=0, sigma_x=1, sigma_y=1, a=None):
