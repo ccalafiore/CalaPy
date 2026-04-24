@@ -22,7 +22,7 @@ __maintainer_email__ = 'dr.carmelo.calafiore@gmail.com'
 submodules = [
     'array', 'check', 'clock', 'combinations', 'directory', 'download',
     'format', 'image', 'lists', 'maths', 'mixamo', 'ml', 'pkl', 'plot', 'preprocess',
-    'shutdown', 'stats', 'stimulation', 'strings', 'threading', 'txt']
+    'shutdown', 'signal_process', 'stats', 'stimulation', 'strings', 'threading', 'txt']
 others = []
 __all__ = submodules + others
 
