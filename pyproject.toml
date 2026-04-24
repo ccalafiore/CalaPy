@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calapy"
-version = "0.2.0.4"
+version = "0.3.0.0"
 dependencies = [
     "numpy",
     "scipy",
@@ -18,7 +18,7 @@ dependencies = [
     "torchvision",
     "Pillow",
 ]
-requires-python = ">= 3.6"
+requires-python = ">= 3.7"
 authors = [
     {name = "Carmelo Calafiore", email = "dr.carmelo.calafiore@gmail.com"},
 ]

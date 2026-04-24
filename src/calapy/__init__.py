@@ -1,7 +1,7 @@
 import datetime
 import importlib
 
-__version__ = '0.2.0.4'
+__version__ = '0.3.0.0'
 
 
 # TODO: Get the release timestamp automatically from PyPI???
